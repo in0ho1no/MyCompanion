@@ -12,7 +12,7 @@ import tomllib
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / 'check_sound_duplicate'))
+sys.path.insert(0, str(Path(__file__).parent.parent / 'check_sound_duplicate'))
 import check_duplicate as dup_checker
 
 _SRC_ROOT = Path(__file__).parent.parent.parent

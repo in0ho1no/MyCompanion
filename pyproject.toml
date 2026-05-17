@@ -105,5 +105,8 @@ exclude = [
     "docs/source/conf\\.py$", # . はエスケープ
 ]
 
+[tool.pyright]
+extraPaths = ["tools/check_sound_duplicate"]
+
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
