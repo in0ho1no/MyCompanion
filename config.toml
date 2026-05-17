@@ -1,6 +1,6 @@
 [generate_voice]
 voicepeak_path = "C:/Program Files/VOICEPEAK/voicepeak.exe"
-narrator = "宮舞モカ"
+narrator = "Miyamai Moca"
 
 [check_sound_duplicate]
 target_folder = "resource/voice/time_signal"
