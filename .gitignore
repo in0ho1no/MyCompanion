@@ -255,3 +255,6 @@ __marimo__/
 # Companion: 音声ファイルはGit管理対象外
 resource/voice/time_signal/
 resource/voice/clicked/
+
+input_voices.json
+available_voices.json
