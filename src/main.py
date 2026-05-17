@@ -1,22 +1,117 @@
-"""テンプレート挙動確認用のサンプルモジュール。
+"""Companion デスクトップアプリ。
 
-このファイルはテンプレートの動作確認用です。
-このテンプレートをベースに構築された環境では、このファイル内を自由に編集して構いません。
+毎時話しかけてくれるデスクトップ常駐キャラクターアプリ。
 """
 
+import random
+import threading
+import time
+import winsound
+from datetime import datetime
+from pathlib import Path
 
-def function_example(arg1: str, arg2: int) -> None:
-    """テンプレート確認用の引数付きサンプル関数。"""
-    print(f'arg1: {arg1}, arg2: {arg2}')
+import flet as ft
+
+_ROOT = Path(__file__).parent
+_TIME_SIGNAL_DIR = _ROOT / 'resource' / 'voice' / 'time_signal'
+_CLICKED_DIR = _ROOT / 'resource' / 'voice' / 'clicked'
+_IMAGE_DIR = _ROOT / 'resource' / 'image' / 'character'
 
 
-def main() -> None:
-    """テンプレート確認用メッセージを表示する。"""
-    print('Pythonテンプレートの挙動確認')
-    print('このファイルはテンプレート確認用です。')
-    print('このテンプレートをベースにした環境では、このファイルを自由に編集して構いません。')
-    function_example('テンプレートサンプル', 42)
+def _find_character_image() -> Path | None:
+    if not _IMAGE_DIR.exists():
+        return None
+    for ext in ('.gif', '.png', '.jpg', '.jpeg'):
+        files = list(_IMAGE_DIR.glob(f'*{ext}'))
+        if files:
+            return files[0]
+    return None
+
+
+def _play_wav(path: Path) -> None:
+    winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+
+
+def _get_time_signal_files(hhmm: str) -> list[Path]:
+    if not _TIME_SIGNAL_DIR.exists():
+        return []
+    return list(_TIME_SIGNAL_DIR.glob(f'{hhmm}_*.wav'))
+
+
+def _get_clicked_files() -> list[Path]:
+    if not _CLICKED_DIR.exists():
+        return []
+    return list(_CLICKED_DIR.glob('*.wav'))
+
+
+def main(page: ft.Page) -> None:
+    """Fletアプリのエントリポイント。"""
+    page.title = 'Companion'
+    page.window.always_on_top = True
+    page.window.width = 320
+    page.window.height = 420
+    page.window.resizable = False
+
+    clock_text = ft.Text('', size=36, weight=ft.FontWeight.BOLD)
+    subtitle_text = ft.Text('', size=11, color=ft.colors.GREY_500)
+
+    image_path = _find_character_image()
+    if image_path:
+        char_control: ft.Control = ft.Image(
+            src=str(image_path),
+            width=220,
+            height=220,
+            fit=ft.ImageFit.CONTAIN,
+        )
+    else:
+        char_control = ft.Text('（キャラクター画像なし）', size=14)
+
+    played_hhmm: set[str] = set()
+
+    def on_character_click(_: ft.ControlEvent) -> None:
+        files = _get_clicked_files()
+        if not files:
+            return
+        chosen = random.choice(files)
+        subtitle_text.value = chosen.name
+        page.update()
+        _play_wav(chosen)
+
+    char_gesture = ft.GestureDetector(
+        content=char_control,
+        on_tap=on_character_click,
+    )
+
+    page.add(
+        ft.Column(
+            [
+                clock_text,
+                char_gesture,
+                subtitle_text,
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=10,
+        )
+    )
+
+    def clock_loop() -> None:
+        while True:
+            now = datetime.now()
+            hhmm = now.strftime('%H%M')
+            clock_text.value = now.strftime('%H:%M')
+            page.update()
+            if hhmm not in played_hhmm:
+                files = _get_time_signal_files(hhmm)
+                if files:
+                    played_hhmm.add(hhmm)
+                    chosen = random.choice(files)
+                    subtitle_text.value = chosen.name
+                    page.update()
+                    _play_wav(chosen)
+            time.sleep(1)
+
+    threading.Thread(target=clock_loop, daemon=True).start()
 
 
 if __name__ == '__main__':
-    main()
+    ft.app(target=main)
