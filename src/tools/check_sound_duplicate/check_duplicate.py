@@ -70,7 +70,7 @@ def check_all_duplicates(folder: Path) -> list[tuple[str, str]]:
 
 def main() -> None:
     """コマンドライン実行のエントリポイント。"""
-    config_path = Path(__file__).parent.parent.parent / 'config.toml'
+    config_path = Path(__file__).parent.parent.parent.parent / 'config.toml'
     with open(config_path, 'rb') as f:
         config = tomllib.load(f)
 

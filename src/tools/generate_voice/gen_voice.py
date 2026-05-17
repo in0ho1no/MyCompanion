@@ -15,13 +15,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'check_sound_duplicate'))
 import check_duplicate as dup_checker
 
-_ROOT = Path(__file__).parent.parent.parent
-_RESOURCE_VOICE_DIR = _ROOT / 'resource' / 'voice'
+_SRC_ROOT = Path(__file__).parent.parent.parent
+_PROJECT_ROOT = _SRC_ROOT.parent
+_RESOURCE_VOICE_DIR = _SRC_ROOT / 'resource' / 'voice'
 _TIME_SIGNAL_DIR = _RESOURCE_VOICE_DIR / 'time_signal'
 _CLICKED_DIR = _RESOURCE_VOICE_DIR / 'clicked'
 _MANIFEST_PATH = _RESOURCE_VOICE_DIR / 'voice_manifest.json'
 _INPUT_JSON_PATH = Path(__file__).parent / 'input_voices.json'
-_CONFIG_PATH = _ROOT / 'config.toml'
+_CONFIG_PATH = _PROJECT_ROOT / 'config.toml'
 
 
 def _load_config(voicepeak_path_arg: str | None) -> tuple[str, str]:
