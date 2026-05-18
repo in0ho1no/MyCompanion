@@ -39,16 +39,16 @@ def test_load_config_prefers_explicit_arguments(tmp_path: Path, monkeypatch: pyt
     assert narrator == 'Arg Narrator'
 
 
-def test_load_config_exits_when_narrator_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """ナレーター未設定なら終了する。"""
+def test_load_config_allows_missing_narrator(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ナレーター未設定でもフォールバックなしとして扱える。"""
     config_path = tmp_path / 'config.toml'
     config_path.write_text('[generate_voice]\nvoicepeak_path = "voicepeak.exe"\n', encoding='utf-8')
     monkeypatch.setattr(gen_voice, '_CONFIG_PATH', config_path)
 
-    with pytest.raises(SystemExit) as exc_info:
-        gen_voice._load_config(None, None)
+    voicepeak_path, narrator = gen_voice._load_config(None, None)
 
-    assert exc_info.value.code == 1
+    assert voicepeak_path == 'voicepeak.exe'
+    assert narrator is None
 
 
 def test_load_manifest_returns_empty_list_when_file_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,7 +116,7 @@ def test_record_to_manifest_appends_duplicate_metadata(tmp_path: Path, monkeypat
 
 def test_validate_input_rejects_clicked_entry_without_name(capsys: pytest.CaptureFixture[str]) -> None:
     """Clicked の name 欠落を検出する。"""
-    is_valid = gen_voice._validate_input({'clicked': [{'text': 'hello'}]})
+    is_valid = gen_voice._validate_input({'clicked': [{'text': 'hello', 'narrator': 'Narrator'}]}, None)
 
     captured = capsys.readouterr()
     assert is_valid is False
@@ -125,4 +125,43 @@ def test_validate_input_rejects_clicked_entry_without_name(capsys: pytest.Captur
 
 def test_validate_input_accepts_valid_entries() -> None:
     """必要キーが揃っていれば入力を受け入れる。"""
-    assert gen_voice._validate_input({'clicked': [{'name': 'tap', 'text': 'hello'}]}) is True
+    input_data = {
+        'time_signal': [
+            {
+                'hhmm': '0700',
+                'texts': [
+                    {'narrator': 'Narrator', 'emotion': 'happy', 'text': 'good morning'},
+                ],
+            }
+        ],
+        'clicked': [{'name': 'tap', 'narrator': 'Narrator', 'text': 'hello'}],
+    }
+
+    assert gen_voice._validate_input(input_data, None) is True
+
+
+def test_validate_input_accepts_default_narrator_for_current_entries() -> None:
+    """各エントリに narrator がなくても既定値があれば受け入れる。"""
+    input_data = {
+        'time_signal': [{'hhmm': '0700', 'texts': [{'text': 'good morning'}]}],
+        'clicked': [{'name': 'tap', 'text': 'hello'}],
+    }
+
+    assert gen_voice._validate_input(input_data, 'Fallback Narrator') is True
+
+
+def test_resolve_emotions_prefers_entry_value() -> None:
+    """Emotion があれば CLI 指定より優先する。"""
+    assert gen_voice._resolve_emotions({'emotion': 'happy'}, 'sad=20') == 'happy'
+
+
+def test_get_output_dir_creates_narrator_specific_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ナレーターごとの出力先を作成して再利用する。"""
+    monkeypatch.setattr(gen_voice, '_RESOURCE_VOICE_DIR', tmp_path)
+
+    cache: dict[str, Path] = {}
+    output_dir = gen_voice._get_output_dir('clicked', 'Narrator', cache)
+
+    assert output_dir == tmp_path / 'clicked' / 'Narrator'
+    assert output_dir.exists()
+    assert gen_voice._get_output_dir('clicked', 'Narrator', cache) == output_dir
