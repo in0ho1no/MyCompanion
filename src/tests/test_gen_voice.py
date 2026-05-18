@@ -7,6 +7,7 @@ from pathlib import Path
 
 import gen_voice
 import pytest
+import yaml
 
 
 class _FixedNow:
@@ -49,6 +50,15 @@ def test_load_config_allows_missing_narrator(tmp_path: Path, monkeypatch: pytest
 
     assert voicepeak_path == 'voicepeak.exe'
     assert narrator is None
+
+
+def test_load_input_data_reads_yaml_mapping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """入力 YAML をそのまま辞書として読み込む。"""
+    input_path = tmp_path / 'input_voices.yaml'
+    input_path.write_text(yaml.safe_dump({'voices': [{'narrator': 'Narrator'}]}, allow_unicode=True), encoding='utf-8')
+    monkeypatch.setattr(gen_voice, '_INPUT_YAML_PATH', input_path)
+
+    assert gen_voice._load_input_data() == {'voices': [{'narrator': 'Narrator'}]}
 
 
 def test_load_manifest_returns_empty_list_when_file_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,7 +126,7 @@ def test_record_to_manifest_appends_duplicate_metadata(tmp_path: Path, monkeypat
 
 def test_validate_input_rejects_clicked_entry_without_name(capsys: pytest.CaptureFixture[str]) -> None:
     """Clicked の name 欠落を検出する。"""
-    is_valid = gen_voice._validate_input({'clicked': [{'text': 'hello', 'narrator': 'Narrator'}]}, None)
+    is_valid = gen_voice._validate_input({'voices': [{'narrator': 'Narrator', 'clicked': [{'text': 'hello'}]}]}, None)
 
     captured = capsys.readouterr()
     assert is_valid is False
@@ -126,15 +136,20 @@ def test_validate_input_rejects_clicked_entry_without_name(capsys: pytest.Captur
 def test_validate_input_accepts_valid_entries() -> None:
     """必要キーが揃っていれば入力を受け入れる。"""
     input_data = {
-        'time_signal': [
+        'voices': [
             {
-                'hhmm': '0700',
-                'texts': [
-                    {'narrator': 'Narrator', 'emotion': 'happy', 'text': 'good morning'},
+                'narrator': 'Narrator',
+                'time_signal': [
+                    {
+                        'hhmm': '0700',
+                        'texts': [
+                            {'emotion': 'happy', 'text': 'good morning'},
+                        ],
+                    }
                 ],
+                'clicked': [{'name': 'tap', 'text': 'hello'}],
             }
-        ],
-        'clicked': [{'name': 'tap', 'narrator': 'Narrator', 'text': 'hello'}],
+        ]
     }
 
     assert gen_voice._validate_input(input_data, None) is True
@@ -143,60 +158,28 @@ def test_validate_input_accepts_valid_entries() -> None:
 def test_validate_input_accepts_default_narrator_for_current_entries() -> None:
     """各エントリに narrator がなくても既定値があれば受け入れる。"""
     input_data = {
-        'time_signal': [{'hhmm': '0700', 'texts': [{'text': 'good morning'}]}],
-        'clicked': [{'name': 'tap', 'text': 'hello'}],
+        'voices': [
+            {
+                'time_signal': [{'hhmm': '0700', 'texts': [{'text': 'good morning'}]}],
+                'clicked': [{'name': 'tap', 'text': 'hello'}],
+            }
+        ]
     }
 
     assert gen_voice._validate_input(input_data, 'Fallback Narrator') is True
 
 
-def test_normalize_input_data_flattens_voice_groups() -> None:
-    """Voices 配下の time_signal と clicked を既存形式へ展開する。"""
+def test_validate_input_accepts_voice_level_narrator_inheritance() -> None:
+    """Voice 単位の narrator を各エントリへ継承できる。"""
     input_data = {
         'voices': [
             {
                 'narrator': 'Narrator A',
-                'time_signal': [
-                    {
-                        'hhmm': '0700',
-                        'texts': [
-                            {'emotion': 'happy', 'text': 'good morning'},
-                            {'narrator': 'Override', 'text': 'override'},
-                        ],
-                    }
-                ],
-                'clicked': [{'name': 'tap', 'emotion': 'fun', 'text': 'hello'}],
+                'time_signal': [{'hhmm': '0700', 'texts': [{'text': 'good morning'}]}],
+                'clicked': [{'name': 'tap', 'text': 'hello'}],
             }
         ]
     }
-
-    assert gen_voice._normalize_input_data(input_data) == {
-        'time_signal': [
-            {
-                'hhmm': '0700',
-                'texts': [
-                    {'narrator': 'Narrator A', 'emotion': 'happy', 'text': 'good morning'},
-                    {'narrator': 'Override', 'text': 'override'},
-                ],
-            }
-        ],
-        'clicked': [{'name': 'tap', 'narrator': 'Narrator A', 'emotion': 'fun', 'text': 'hello'}],
-    }
-
-
-def test_validate_input_accepts_normalized_voice_groups() -> None:
-    """Voices 構造でも narrator を継承した上で検証できる。"""
-    input_data = gen_voice._normalize_input_data(
-        {
-            'voices': [
-                {
-                    'narrator': 'Narrator A',
-                    'time_signal': [{'hhmm': '0700', 'texts': [{'text': 'good morning'}]}],
-                    'clicked': [{'name': 'tap', 'text': 'hello'}],
-                }
-            ]
-        }
-    )
 
     assert gen_voice._validate_input(input_data, None) is True
 
