@@ -35,7 +35,12 @@ def load_voicepeak_path() -> str | None:
         return None
     with open(CONFIG_PATH, 'rb') as f:
         config = tomllib.load(f)
-    return config.get('generate_voice', {}).get('voicepeak_path')
+    generate_voice = config.get('generate_voice', {})
+    if not isinstance(generate_voice, dict):
+        return None
+
+    voicepeak_path = generate_voice.get('voicepeak_path')
+    return voicepeak_path if isinstance(voicepeak_path, str) else None
 
 
 def run_voicepeak(exe: str, args: list[str]) -> str:

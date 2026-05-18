@@ -17,35 +17,28 @@ Python + Flet によるデスクトップアプリとして実装する。
 
 ```
 project root/
-├── config.toml                          # 全ツール共通設定（プロジェクトルート）
 ├── pyproject.toml
 ├── uv.lock
 ├── docs/
 │   └── SPEC.md                          # 本仕様書
 ├── src/
+│   ├── config.toml                      # 全ツール共通設定
 │   ├── main.py                          # Flet アプリ本体
 │   ├── resource/
 │   │   ├── voice/
 │   │   │   └── voice_manifest.json      # 音声ファイル ↔ テキスト対応記録（初期値）
 │   │   └── image/
 │   │       └── character/               # キャラクター画像置き場
-│   └── tests/                           # テストディレクトリ
-├── resource/                            # 生成物置き場（一部 Git 管理外 ※後述）
-│   └── voice/
-│       ├── voice_manifest.json          # 音声ファイル ↔ テキスト対応記録（ツールが出力）
-│       ├── time_signal/                 # 時報ボイス置き場
-│       │   └── {narrator}/             # ナレーター名サブディレクトリ
-│       └── clicked/                     # クリック反応ボイス置き場
-│           └── {narrator}/             # ナレーター名サブディレクトリ
-└── tools/
-    ├── generate_voice/
-    │   ├── gen_voice.py                 # 音声生成スクリプト
-    │   └── input_voices.json            # 生成テキスト定義（Git 管理外）
-    ├── check_sound_duplicate/
-    │   └── check_duplicate.py           # 重複チェックスクリプト
-    └── list_voices/
-        ├── list_voices.py               # ナレーター・感情一覧取得スクリプト
-        └── available_voices.json        # 取得結果（Git 管理外）
+│   ├── tests/                           # テストディレクトリ
+│   └── tools/
+│       ├── generate_voice/
+│       │   ├── gen_voice.py             # 音声生成スクリプト
+│       │   └── input_voices.json        # 生成テキスト定義（Git 管理外）
+│       ├── check_sound_duplicate/
+│       │   └── check_duplicate.py       # 重複チェックスクリプト
+│       └── list_voices/
+│           ├── list_voices.py           # ナレーター・感情一覧取得スクリプト
+│           └── available_voices.json    # 取得結果（Git 管理外）
 ```
 
 ---
@@ -58,8 +51,8 @@ project root/
 |------|------|------|
 | `resource/voice/time_signal/` | 生成音声 | VOICEPEAK が生成するバイナリ（環境依存・大容量） |
 | `resource/voice/clicked/` | 生成音声 | 同上 |
-| `input_voices.json` | ツール設定 | 音声生成テキスト定義（任意の場所） |
-| `available_voices.json` | ツール出力 | インストール済みナレーター一覧（環境依存） |
+| `src/tools/generate_voice/input_voices.json` | ツール設定 | 音声生成テキスト定義（環境依存） |
+| `src/tools/list_voices/available_voices.json` | ツール出力 | インストール済みナレーター一覧（環境依存） |
 
 > `resource/voice/voice_manifest.json`（音声管理台帳）および `src/resource/voice/voice_manifest.json`（初期値）は Git 管理対象。
 
@@ -95,9 +88,9 @@ resource/voice/clicked/{narrator}/{name}_xxx.wav
 
 ---
 
-## config.toml
+## src/config.toml
 
-プロジェクトルートに1ファイルとして配置。ツールごとにセクション分け。
+src 配下に1ファイルとして配置。ツールごとにセクション分け。
 CLI 引数での指定が優先され、なければ config.toml から読み込む（各ツール共通ルール）。
 
 ```toml
@@ -111,7 +104,7 @@ target_folder = "resource/voice/time_signal"
 
 ---
 
-## tools/generate_voice/
+## src/tools/generate_voice/
 
 ### input_voices.json フォーマット
 
@@ -197,7 +190,7 @@ target_folder = "resource/voice/time_signal"
 
 ---
 
-## tools/check_sound_duplicate/
+## src/tools/check_sound_duplicate/
 
 ### check_duplicate.py 仕様
 
@@ -228,7 +221,7 @@ python check_duplicate.py
 
 ---
 
-## tools/list_voices/
+## src/tools/list_voices/
 
 ### list_voices.py 仕様
 

@@ -70,11 +70,11 @@ def check_all_duplicates(folder: Path) -> list[tuple[str, str]]:
 
 def main() -> None:
     """コマンドライン実行のエントリポイント。"""
-    config_path = Path(__file__).parent.parent.parent.parent / 'config.toml'
+    config_path = Path(__file__).parent.parent.parent / 'config.toml'
     with open(config_path, 'rb') as f:
         config = tomllib.load(f)
 
-    folder = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(config['check_sound_duplicate']['target_folder'])
+    folder = Path(sys.argv[1]) if len(sys.argv) > 1 else config_path.parent / config['check_sound_duplicate']['target_folder']
 
     if not folder.exists():
         print(f'フォルダが見つかりません: {folder}')

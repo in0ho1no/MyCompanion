@@ -106,7 +106,7 @@ exclude = [
 ]
 
 [tool.pyright]
-extraPaths = ["tools/check_sound_duplicate"]
+extraPaths = ["src/tools/check_sound_duplicate"]
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
