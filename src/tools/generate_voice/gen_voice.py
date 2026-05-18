@@ -9,8 +9,11 @@ import json
 import subprocess
 import sys
 import tomllib
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'check_sound_duplicate'))
 import check_duplicate as dup_checker
@@ -18,20 +21,33 @@ import check_duplicate as dup_checker
 _SRC_ROOT = Path(__file__).parent.parent.parent
 _RESOURCE_VOICE_DIR = _SRC_ROOT / 'resource' / 'voice'
 _MANIFEST_PATH = _RESOURCE_VOICE_DIR / 'voice_manifest.json'
-_INPUT_JSON_PATH = Path(__file__).parent / 'input_voices.json'
+_INPUT_YAML_PATH = Path(__file__).parent / 'input_voices.yaml'
 _CONFIG_PATH = _SRC_ROOT / 'config.toml'
 
 
-def _load_config(voicepeak_path_arg: str | None, narrator_arg: str | None) -> tuple[str, str]:
+def _display_output_path(output_path: Path) -> str:
+    with contextlib.suppress(ValueError):
+        return output_path.relative_to(_RESOURCE_VOICE_DIR).as_posix()
+    return output_path.as_posix()
+
+
+def _load_config(voicepeak_path_arg: str | None, narrator_arg: str | None) -> tuple[str, str | None]:
     with open(_CONFIG_PATH, 'rb') as f:
         config = tomllib.load(f)
     section = config['generate_voice']
     voicepeak_path: str = voicepeak_path_arg or section['voicepeak_path']
-    narrator: str = narrator_arg or section.get('narrator', '')
-    if not narrator:
-        print('エラー: narrator が指定されていません。--narrator オプションか config.toml の narrator を設定してください。')
-        sys.exit(1)
+    narrator = narrator_arg or section.get('narrator')
     return voicepeak_path, narrator
+
+
+def _load_input_data() -> dict[str, object]:
+    with open(_INPUT_YAML_PATH, encoding='utf-8') as f:
+        loaded = yaml.safe_load(f)
+
+    if not isinstance(loaded, dict):
+        raise ValueError('input_voices.yaml のルートはマッピングである必要があります。')
+
+    return loaded
 
 
 def _load_manifest() -> list[dict[str, object]]:
@@ -100,12 +116,105 @@ def _record_to_manifest(
     manifest.append(record)
 
 
-def _validate_input(input_data: dict[str, object]) -> bool:
-    for entry in input_data.get('clicked', []):  # type: ignore[attr-defined]
-        if 'name' not in entry:  # type: ignore[operator]
-            print(f'エラー: clickedエントリに "name" キーがありません: {entry}')
+def _resolve_narrator(entry: Mapping[str, object], default_narrator: str | None) -> str | None:
+    narrator = entry.get('narrator', default_narrator)
+    if isinstance(narrator, str) and narrator:
+        return narrator
+    return None
+
+
+def _normalize_emotions(emotions: str | None) -> str | None:
+    if emotions is None:
+        return None
+    if '=' in emotions or ',' in emotions:
+        return emotions
+    return f'{emotions}=100'
+
+
+def _resolve_emotions(entry: Mapping[str, object], default_emotions: str | None) -> str | None:
+    emotion = entry.get('emotion')
+    if isinstance(emotion, str) and emotion:
+        return _normalize_emotions(emotion)
+    return _normalize_emotions(default_emotions)
+
+
+def _get_output_dir(category: str, narrator: str, dir_cache: dict[str, Path]) -> Path:
+    output_dir = dir_cache.get(narrator)
+    if output_dir is None:
+        output_dir = _RESOURCE_VOICE_DIR / category / narrator
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dir_cache[narrator] = output_dir
+    return output_dir
+
+
+def _validate_input(input_data: Mapping[str, object], default_narrator: str | None) -> bool:
+    voices = input_data.get('voices')
+    if not isinstance(voices, list):
+        print('エラー: voices は配列である必要があります。')
+        return False
+
+    for voice in voices:
+        if not isinstance(voice, dict):
+            print(f'エラー: voice エントリが不正です: {voice}')
             return False
+        voice_narrator = _resolve_narrator(voice, default_narrator)
+
+        clicked_entries = voice.get('clicked', [])
+        if not isinstance(clicked_entries, list):
+            print(f'エラー: clicked は配列である必要があります: {voice}')
+            return False
+
+        for entry in clicked_entries:
+            if not isinstance(entry, dict):
+                print(f'エラー: clicked エントリが不正です: {entry}')
+                return False
+            if 'name' not in entry:
+                print(f'エラー: clickedエントリに "name" キーがありません: {entry}')
+                return False
+            if 'text' not in entry:
+                print(f'エラー: clickedエントリに "text" キーがありません: {entry}')
+                return False
+            if _resolve_narrator(entry, voice_narrator) is None:
+                print(f'エラー: clickedエントリに narrator がありません: {entry}')
+                return False
+
+        time_signal_entries = voice.get('time_signal', [])
+        if not isinstance(time_signal_entries, list):
+            print(f'エラー: time_signal は配列である必要があります: {voice}')
+            return False
+
+        for entry in time_signal_entries:
+            if not isinstance(entry, dict):
+                print(f'エラー: time_signal エントリが不正です: {entry}')
+                return False
+            if 'hhmm' not in entry:
+                print(f'エラー: time_signalエントリに "hhmm" キーがありません: {entry}')
+                return False
+
+            texts = entry.get('texts')
+            if not isinstance(texts, list):
+                print(f'エラー: time_signalエントリの "texts" は配列である必要があります: {entry}')
+                return False
+
+            for text_entry in texts:
+                if not isinstance(text_entry, dict):
+                    print(f'エラー: time_signal の text エントリが不正です: {text_entry}')
+                    return False
+                if 'text' not in text_entry:
+                    print(f'エラー: time_signal の text エントリに "text" キーがありません: {text_entry}')
+                    return False
+                if _resolve_narrator(text_entry, voice_narrator) is None:
+                    print(f'エラー: time_signal の text エントリに narrator がありません: {text_entry}')
+                    return False
+
     return True
+
+
+def _get_required_str(entry: Mapping[str, object], key: str) -> str:
+    value = entry.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f'必須文字列 {key} が不足しています: {entry}')
+    return value
 
 
 def main() -> None:
@@ -116,49 +225,84 @@ def main() -> None:
     parser.add_argument('--emotions', help='感情パラメータ（例: happy=50,angry=20）')
     args = parser.parse_args()
 
-    voicepeak, narrator = _load_config(args.voicepeak_path, args.narrator)
-    emotions: str | None = args.emotions or None
+    voicepeak, default_narrator = _load_config(args.voicepeak_path, args.narrator)
+    default_emotions: str | None = args.emotions or None
 
-    with open(_INPUT_JSON_PATH, encoding='utf-8') as f:
-        input_data: dict[str, object] = json.load(f)
-
-    if not _validate_input(input_data):
+    try:
+        input_data = _load_input_data()
+    except ValueError as e:
+        print(f'エラー: {e}')
         sys.exit(1)
 
-    time_signal_dir = _RESOURCE_VOICE_DIR / 'time_signal' / narrator
-    clicked_dir = _RESOURCE_VOICE_DIR / 'clicked' / narrator
-    time_signal_dir.mkdir(parents=True, exist_ok=True)
-    clicked_dir.mkdir(parents=True, exist_ok=True)
+    if not _validate_input(input_data, default_narrator):
+        sys.exit(1)
+
+    time_signal_dirs: dict[str, Path] = {}
+    clicked_dirs: dict[str, Path] = {}
 
     manifest = _load_manifest()
     total_success = 0
     total_failure = 0
 
-    for entry in input_data.get('time_signal', []):  # type: ignore[attr-defined]
-        hhmm: str = entry['hhmm']  # type: ignore[index]
-        for text in entry['texts']:  # type: ignore[index]
-            num = _get_next_number(time_signal_dir, hhmm)
-            filename = f'{hhmm}_{num:03d}.wav'
-            output_path = time_signal_dir / filename
-            print(f'生成中: {filename}')
+    voices = input_data.get('voices', [])
+    if not isinstance(voices, list):
+        sys.exit(1)
+
+    for voice in voices:
+        if not isinstance(voice, dict):
+            continue
+        voice_narrator = _resolve_narrator(voice, default_narrator)
+
+        time_signal_entries = voice.get('time_signal', [])
+        if isinstance(time_signal_entries, list):
+            for entry in time_signal_entries:
+                if not isinstance(entry, dict):
+                    continue
+                hhmm = _get_required_str(entry, 'hhmm')
+                texts = entry.get('texts', [])
+                if not isinstance(texts, list):
+                    continue
+                for text_entry in texts:
+                    if not isinstance(text_entry, dict):
+                        continue
+                    narrator = _resolve_narrator(text_entry, voice_narrator)
+                    if narrator is None:
+                        continue
+                    text = _get_required_str(text_entry, 'text')
+                    emotions = _resolve_emotions(text_entry, default_emotions)
+                    time_signal_dir = _get_output_dir('time_signal', narrator, time_signal_dirs)
+                    num = _get_next_number(time_signal_dir, hhmm)
+                    filename = f'{hhmm}_{num:03d}.wav'
+                    output_path = time_signal_dir / filename
+                    print(f'生成中: narrator={narrator}, file={_display_output_path(output_path)}')
+                    if _generate_voice(voicepeak, narrator, text, output_path, emotions):
+                        _record_to_manifest(manifest, filename, 'time_signal', {'hhmm': hhmm}, text, narrator, emotions, output_path, time_signal_dir)
+                        total_success += 1
+                    else:
+                        total_failure += 1
+
+        clicked_entries = voice.get('clicked', [])
+        if not isinstance(clicked_entries, list):
+            continue
+        for entry in clicked_entries:
+            if not isinstance(entry, dict):
+                continue
+            narrator = _resolve_narrator(entry, voice_narrator)
+            if narrator is None:
+                continue
+            name = _get_required_str(entry, 'name')
+            text = _get_required_str(entry, 'text')
+            emotions = _resolve_emotions(entry, default_emotions)
+            clicked_dir = _get_output_dir('clicked', narrator, clicked_dirs)
+            num = _get_next_number(clicked_dir, name)
+            filename = f'{name}_{num:03d}.wav'
+            output_path = clicked_dir / filename
+            print(f'生成中: narrator={narrator}, file={_display_output_path(output_path)}')
             if _generate_voice(voicepeak, narrator, text, output_path, emotions):
-                _record_to_manifest(manifest, filename, 'time_signal', {'hhmm': hhmm}, text, narrator, emotions, output_path, time_signal_dir)
+                _record_to_manifest(manifest, filename, 'clicked', {'name': name}, text, narrator, emotions, output_path, clicked_dir)
                 total_success += 1
             else:
                 total_failure += 1
-
-    for entry in input_data.get('clicked', []):  # type: ignore[attr-defined]
-        name: str = entry['name']  # type: ignore[index]
-        text = entry['text']  # type: ignore[index]
-        num = _get_next_number(clicked_dir, name)
-        filename = f'{name}_{num:03d}.wav'
-        output_path = clicked_dir / filename
-        print(f'生成中: {filename}')
-        if _generate_voice(voicepeak, narrator, text, output_path, emotions):
-            _record_to_manifest(manifest, filename, 'clicked', {'name': name}, text, narrator, emotions, output_path, clicked_dir)
-            total_success += 1
-        else:
-            total_failure += 1
 
     _save_manifest(manifest)
     print(f'\n完了: {total_success} 件成功 / {total_failure} 件失敗')
