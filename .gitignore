@@ -252,9 +252,23 @@ __marimo__/
 # END TEMPLATE: Python-template
 ###############################################################################
 
-# Companion: 音声ファイルはGit管理対象外
-resource/voice/time_signal/
-resource/voice/clicked/
+###############################################################################
+# START Companion
+###############################################################################
+# 画像
+src/resource/image/character/*
+!src/resource/image/character/.gitkeep
 
-input_voices.json
-available_voices.json
+# 音声
+src/resource/voice/clicked/*
+!src/resource/voice/clicked/.gitkeep
+
+src/resource/voice/time_signal/*
+!src/resource/voice/time_signal/.gitkeep
+
+src/tools/generate_voice/input_voices.json
+src/tools/list_voices/available_voices.json
+
+###############################################################################
+# END Companion
+###############################################################################
