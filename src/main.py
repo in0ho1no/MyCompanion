@@ -53,7 +53,7 @@ def main(page: ft.Page) -> None:
     page.window.resizable = False
 
     clock_text = ft.Text('', size=36, weight=ft.FontWeight.BOLD)
-    subtitle_text = ft.Text('', size=11, color=ft.colors.GREY_500)
+    subtitle_text = ft.Text('', size=11, color=ft.Colors.GREY_500)
 
     image_path = _find_character_image()
     if image_path:
@@ -61,14 +61,14 @@ def main(page: ft.Page) -> None:
             src=str(image_path),
             width=220,
             height=220,
-            fit=ft.ImageFit.CONTAIN,
+            fit=ft.BoxFit.CONTAIN,
         )
     else:
         char_control = ft.Text('（キャラクター画像なし）', size=14)
 
     played_hhmm: set[str] = set()
 
-    def on_character_click(_: ft.ControlEvent) -> None:
+    def on_character_click(_: ft.TapEvent) -> None:
         files = _get_clicked_files()
         if not files:
             return
