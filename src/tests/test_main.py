@@ -29,22 +29,26 @@ def test_find_character_image_prefers_extension_order(tmp_path: Path, monkeypatc
 
 def test_get_time_signal_files_filters_by_hhmm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """指定時刻に一致する WAV だけを返す。"""
-    expected = tmp_path / '0700_001.wav'
+    narrator_dir = tmp_path / 'Narrator'
+    narrator_dir.mkdir()
+    expected = narrator_dir / '0700_001.wav'
     expected.write_bytes(b'a')
-    (tmp_path / '0700_002.wav').write_bytes(b'b')
-    (tmp_path / '0800_001.wav').write_bytes(b'c')
+    (narrator_dir / '0700_002.wav').write_bytes(b'b')
+    (narrator_dir / '0800_001.wav').write_bytes(b'c')
     monkeypatch.setattr(main, '_TIME_SIGNAL_DIR', tmp_path)
 
     files = sorted(main._get_time_signal_files('0700'))
 
-    assert files == sorted([expected, tmp_path / '0700_002.wav'])
+    assert files == sorted([expected, narrator_dir / '0700_002.wav'])
 
 
 def test_get_clicked_files_returns_only_wavs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """クリック音声は wav 拡張子のみ列挙する。"""
-    wav_path = tmp_path / 'hello.wav'
+    narrator_dir = tmp_path / 'Narrator'
+    narrator_dir.mkdir()
+    wav_path = narrator_dir / 'hello.wav'
     wav_path.write_bytes(b'wav')
-    (tmp_path / 'ignore.txt').write_text('x', encoding='utf-8')
+    (narrator_dir / 'ignore.txt').write_text('x', encoding='utf-8')
     monkeypatch.setattr(main, '_CLICKED_DIR', tmp_path)
 
     assert main._get_clicked_files() == [wav_path]

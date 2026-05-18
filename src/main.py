@@ -35,13 +35,13 @@ def _play_wav(path: Path) -> None:
 def _get_time_signal_files(hhmm: str) -> list[Path]:
     if not _TIME_SIGNAL_DIR.exists():
         return []
-    return list(_TIME_SIGNAL_DIR.glob(f'{hhmm}_*.wav'))
+    return sorted(_TIME_SIGNAL_DIR.rglob(f'{hhmm}_*.wav'))
 
 
 def _get_clicked_files() -> list[Path]:
     if not _CLICKED_DIR.exists():
         return []
-    return list(_CLICKED_DIR.glob('*.wav'))
+    return sorted(_CLICKED_DIR.rglob('*.wav'))
 
 
 def main(page: ft.Page) -> None:
