@@ -25,7 +25,6 @@ _PADDING: int = 14
 _GAP: int = 14
 _BODY_H: int = _WIN_H - _TITLEBAR_H - _PADDING * 2
 _CHAR_W: int = int(_BODY_H * 9 / 16)
-_RIGHT_W: int = _WIN_W - _PADDING * 2 - _CHAR_W - _GAP
 
 # カラーパレット（ライト・ウォームクリーム）
 _C_BG_WINDOW = '#faf6ef'
@@ -78,6 +77,7 @@ def main(page: ft.Page) -> None:
     page.window.always_on_top = True
     page.window.width = _WIN_W
     page.window.height = _WIN_H
+    page.window.maximizable = False
     page.window.resizable = False
     page.bgcolor = _C_BG_WINDOW
     page.padding = 0
@@ -233,8 +233,8 @@ def main(page: ft.Page) -> None:
             spacing=_GAP,
             expand=True,
         ),
-        width=_RIGHT_W,
         height=_BODY_H,
+        expand=True,
     )
 
     # タイトルバー
@@ -274,10 +274,14 @@ def main(page: ft.Page) -> None:
                 titlebar,
                 ft.Container(
                     content=ft.Row(
-                        [char_container, right_col],
-                        spacing=_GAP,
+                        [
+                            char_container,
+                            ft.Container(width=_GAP),
+                            right_col,
+                        ],
+                        spacing=0,
                     ),
-                    padding=ft.Padding.all(_PADDING),
+                    padding=ft.Padding.only(left=_PADDING, right=_PADDING, top=_PADDING, bottom=_PADDING),
                     expand=True,
                 ),
             ],
