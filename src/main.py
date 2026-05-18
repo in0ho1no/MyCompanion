@@ -3,9 +3,8 @@
 毎時話しかけてくれるデスクトップ常駐キャラクターアプリ。
 """
 
+import asyncio
 import random
-import threading
-import time
 import winsound
 from datetime import datetime
 from pathlib import Path
@@ -52,7 +51,7 @@ def main(page: ft.Page) -> None:
     page.window.height = 420
     page.window.resizable = False
 
-    clock_text = ft.Text('', size=36, weight=ft.FontWeight.BOLD)
+    clock_text = ft.Text(datetime.now().strftime('%H:%M'), size=36, weight=ft.FontWeight.BOLD)
     subtitle_text = ft.Text('', size=11, color=ft.Colors.GREY_500)
 
     image_path = _find_character_image()
@@ -94,7 +93,7 @@ def main(page: ft.Page) -> None:
         )
     )
 
-    def clock_loop() -> None:
+    async def clock_loop() -> None:
         while True:
             now = datetime.now()
             hhmm = now.strftime('%H%M')
@@ -108,9 +107,9 @@ def main(page: ft.Page) -> None:
                     subtitle_text.value = chosen.name
                     page.update()
                     _play_wav(chosen)
-            time.sleep(1)
+            await asyncio.sleep(1)
 
-    threading.Thread(target=clock_loop, daemon=True).start()
+    page.run_task(clock_loop)
 
 
 if __name__ == '__main__':
