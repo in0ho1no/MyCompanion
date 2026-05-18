@@ -9,6 +9,7 @@ import json
 import subprocess
 import sys
 import tomllib
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,62 @@ def _resolve_narrator(entry: dict[str, object], default_narrator: str | None) ->
     return None
 
 
+def _normalize_input_data(input_data: Mapping[str, object]) -> dict[str, object]:
+    voices = input_data.get('voices')
+    if not isinstance(voices, list):
+        return dict(input_data)
+
+    normalized_time_signal: list[object] = []
+    normalized_clicked: list[object] = []
+
+    for voice in voices:
+        if not isinstance(voice, dict):
+            continue
+
+        narrator = voice.get('narrator')
+
+        time_signal_entries = voice.get('time_signal', [])
+        if isinstance(time_signal_entries, list):
+            for entry in time_signal_entries:
+                if not isinstance(entry, dict):
+                    normalized_time_signal.append(entry)
+                    continue
+
+                normalized_entry = dict(entry)
+                texts = entry.get('texts', [])
+                if isinstance(texts, list):
+                    normalized_texts: list[object] = []
+                    for text_entry in texts:
+                        if not isinstance(text_entry, dict):
+                            normalized_texts.append(text_entry)
+                            continue
+
+                        normalized_text_entry = dict(text_entry)
+                        if narrator is not None and 'narrator' not in normalized_text_entry:
+                            normalized_text_entry['narrator'] = narrator
+                        normalized_texts.append(normalized_text_entry)
+                    normalized_entry['texts'] = normalized_texts
+
+                normalized_time_signal.append(normalized_entry)
+
+        clicked_entries = voice.get('clicked', [])
+        if isinstance(clicked_entries, list):
+            for entry in clicked_entries:
+                if not isinstance(entry, dict):
+                    normalized_clicked.append(entry)
+                    continue
+
+                normalized_entry = dict(entry)
+                if narrator is not None and 'narrator' not in normalized_entry:
+                    normalized_entry['narrator'] = narrator
+                normalized_clicked.append(normalized_entry)
+
+    return {
+        'time_signal': normalized_time_signal,
+        'clicked': normalized_clicked,
+    }
+
+
 def _normalize_emotions(emotions: str | None) -> str | None:
     if emotions is None:
         return None
@@ -206,7 +263,7 @@ def main() -> None:
     default_emotions: str | None = args.emotions or None
 
     with open(_INPUT_JSON_PATH, encoding='utf-8') as f:
-        input_data: dict[str, Any] = json.load(f)
+        input_data: dict[str, Any] = _normalize_input_data(json.load(f))
 
     if not _validate_input(input_data, default_narrator):
         sys.exit(1)

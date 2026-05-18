@@ -150,6 +150,57 @@ def test_validate_input_accepts_default_narrator_for_current_entries() -> None:
     assert gen_voice._validate_input(input_data, 'Fallback Narrator') is True
 
 
+def test_normalize_input_data_flattens_voice_groups() -> None:
+    """Voices 配下の time_signal と clicked を既存形式へ展開する。"""
+    input_data = {
+        'voices': [
+            {
+                'narrator': 'Narrator A',
+                'time_signal': [
+                    {
+                        'hhmm': '0700',
+                        'texts': [
+                            {'emotion': 'happy', 'text': 'good morning'},
+                            {'narrator': 'Override', 'text': 'override'},
+                        ],
+                    }
+                ],
+                'clicked': [{'name': 'tap', 'emotion': 'fun', 'text': 'hello'}],
+            }
+        ]
+    }
+
+    assert gen_voice._normalize_input_data(input_data) == {
+        'time_signal': [
+            {
+                'hhmm': '0700',
+                'texts': [
+                    {'narrator': 'Narrator A', 'emotion': 'happy', 'text': 'good morning'},
+                    {'narrator': 'Override', 'text': 'override'},
+                ],
+            }
+        ],
+        'clicked': [{'name': 'tap', 'narrator': 'Narrator A', 'emotion': 'fun', 'text': 'hello'}],
+    }
+
+
+def test_validate_input_accepts_normalized_voice_groups() -> None:
+    """Voices 構造でも narrator を継承した上で検証できる。"""
+    input_data = gen_voice._normalize_input_data(
+        {
+            'voices': [
+                {
+                    'narrator': 'Narrator A',
+                    'time_signal': [{'hhmm': '0700', 'texts': [{'text': 'good morning'}]}],
+                    'clicked': [{'name': 'tap', 'text': 'hello'}],
+                }
+            ]
+        }
+    )
+
+    assert gen_voice._validate_input(input_data, None) is True
+
+
 def test_resolve_emotions_prefers_entry_value() -> None:
     """Emotion があれば CLI 指定より優先する。"""
     assert gen_voice._resolve_emotions({'emotion': 'happy'}, 'sad=20') == 'happy=100'
