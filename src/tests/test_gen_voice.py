@@ -152,7 +152,17 @@ def test_validate_input_accepts_default_narrator_for_current_entries() -> None:
 
 def test_resolve_emotions_prefers_entry_value() -> None:
     """Emotion があれば CLI 指定より優先する。"""
-    assert gen_voice._resolve_emotions({'emotion': 'happy'}, 'sad=20') == 'happy'
+    assert gen_voice._resolve_emotions({'emotion': 'happy'}, 'sad=20') == 'happy=100'
+
+
+def test_normalize_emotions_preserves_explicit_expression() -> None:
+    """明示的な emotion 式はそのまま使う。"""
+    assert gen_voice._normalize_emotions('happy=50,angry=20') == 'happy=50,angry=20'
+
+
+def test_normalize_emotions_expands_simple_name() -> None:
+    """単独の emotion 名は 100 指定に展開する。"""
+    assert gen_voice._normalize_emotions('honwaka') == 'honwaka=100'
 
 
 def test_get_output_dir_creates_narrator_specific_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,3 +175,12 @@ def test_get_output_dir_creates_narrator_specific_directory(tmp_path: Path, monk
     assert output_dir == tmp_path / 'clicked' / 'Narrator'
     assert output_dir.exists()
     assert gen_voice._get_output_dir('clicked', 'Narrator', cache) == output_dir
+
+
+def test_display_output_path_uses_voice_relative_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """生成ログには voice ルートからの相対パスを出す。"""
+    monkeypatch.setattr(gen_voice, '_RESOURCE_VOICE_DIR', tmp_path)
+
+    output_path = tmp_path / 'time_signal' / 'Narrator' / '0700_001.wav'
+
+    assert gen_voice._display_output_path(output_path) == 'time_signal/Narrator/0700_001.wav'

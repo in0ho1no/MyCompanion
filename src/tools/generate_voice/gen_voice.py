@@ -23,6 +23,12 @@ _INPUT_JSON_PATH = Path(__file__).parent / 'input_voices.json'
 _CONFIG_PATH = _SRC_ROOT / 'config.toml'
 
 
+def _display_output_path(output_path: Path) -> str:
+    with contextlib.suppress(ValueError):
+        return output_path.relative_to(_RESOURCE_VOICE_DIR).as_posix()
+    return output_path.as_posix()
+
+
 def _load_config(voicepeak_path_arg: str | None, narrator_arg: str | None) -> tuple[str, str | None]:
     with open(_CONFIG_PATH, 'rb') as f:
         config = tomllib.load(f)
@@ -105,11 +111,19 @@ def _resolve_narrator(entry: dict[str, object], default_narrator: str | None) ->
     return None
 
 
+def _normalize_emotions(emotions: str | None) -> str | None:
+    if emotions is None:
+        return None
+    if '=' in emotions or ',' in emotions:
+        return emotions
+    return f'{emotions}=100'
+
+
 def _resolve_emotions(entry: dict[str, object], default_emotions: str | None) -> str | None:
     emotion = entry.get('emotion')
     if isinstance(emotion, str) and emotion:
-        return emotion
-    return default_emotions
+        return _normalize_emotions(emotion)
+    return _normalize_emotions(default_emotions)
 
 
 def _get_output_dir(category: str, narrator: str, dir_cache: dict[str, Path]) -> Path:
@@ -223,7 +237,7 @@ def main() -> None:
             num = _get_next_number(time_signal_dir, hhmm)
             filename = f'{hhmm}_{num:03d}.wav'
             output_path = time_signal_dir / filename
-            print(f'生成中: {filename}')
+            print(f'生成中: narrator={narrator}, file={_display_output_path(output_path)}')
             if _generate_voice(voicepeak, narrator, text, output_path, emotions):
                 _record_to_manifest(manifest, filename, 'time_signal', {'hhmm': hhmm}, text, narrator, emotions, output_path, time_signal_dir)
                 total_success += 1
@@ -243,7 +257,7 @@ def main() -> None:
         num = _get_next_number(clicked_dir, name)
         filename = f'{name}_{num:03d}.wav'
         output_path = clicked_dir / filename
-        print(f'生成中: {filename}')
+        print(f'生成中: narrator={narrator}, file={_display_output_path(output_path)}')
         if _generate_voice(voicepeak, narrator, text, output_path, emotions):
             _record_to_manifest(manifest, filename, 'clicked', {'name': name}, text, narrator, emotions, output_path, clicked_dir)
             total_success += 1
