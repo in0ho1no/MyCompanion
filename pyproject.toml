@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "flet>=0.85.1",
 ]
 
 [dependency-groups]
@@ -103,6 +104,9 @@ ignore_missing_imports = true
 exclude = [
     "docs/source/conf\\.py$", # . はエスケープ
 ]
+
+[tool.pyright]
+extraPaths = ["src/tools/check_sound_duplicate"]
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
