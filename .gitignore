@@ -266,6 +266,8 @@ src/resource/voice/clicked/*
 src/resource/voice/time_signal/*
 !src/resource/voice/time_signal/.gitkeep
 
+src/resource/voice/voice_manifest.json
+
 src/tools/generate_voice/input_voices.yaml
 src/tools/list_voices/available_voices.json
 
