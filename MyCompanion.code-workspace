@@ -56,5 +56,11 @@
 		},
 
 		"autoDocstring.docstringFormat": "google",
+		"chat.tools.terminal.autoApprove": {
+			"uv run ruff": true,
+			"uv run mypy": true,
+			"uv run pytest": true,
+			"uv run python src/main.py": true,
+		},
 	}
 }
