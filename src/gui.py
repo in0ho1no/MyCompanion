@@ -58,7 +58,7 @@ def main(page: ft.Page) -> None:
                 [
                     ft.Text('9 : 16', size=13, weight=ft.FontWeight.W_500, color=_C_INK, font_family=_MONO),
                     ft.Text('drop character image here', size=12, color=_C_INK_MUTE, font_family=_MONO),
-                    ft.Text('resource/image/character/', size=11, color=_C_INK_MUTE, font_family=_MONO, opacity=0.7),
+                    ft.Text('resource/image/character/<name>/1.png', size=11, color=_C_INK_MUTE, font_family=_MONO, opacity=0.7),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,

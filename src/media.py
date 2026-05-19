@@ -14,7 +14,7 @@ def _find_character_image() -> Path | None:
     if not _IMAGE_DIR.exists():
         return None
     for ext in ('.gif', '.png', '.jpg', '.jpeg'):
-        files = list(_IMAGE_DIR.glob(f'*{ext}'))
+        files = sorted(_IMAGE_DIR.rglob(f'*{ext}'))
         if files:
             return files[0]
     return None

@@ -27,6 +27,17 @@ def test_find_character_image_prefers_extension_order(tmp_path: Path, monkeypatc
     assert media._find_character_image() == png_path
 
 
+def test_find_character_image_searches_narrator_subdirectories(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """キャラクター別サブディレクトリ内の画像も探索する。"""
+    narrator_dir = tmp_path / 'Miyamai Moca'
+    narrator_dir.mkdir()
+    image_path = narrator_dir / '1.png'
+    image_path.write_bytes(b'png')
+    monkeypatch.setattr(media, '_IMAGE_DIR', tmp_path)
+
+    assert media._find_character_image() == image_path
+
+
 def test_get_time_signal_files_filters_by_hhmm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """指定時刻に一致する WAV だけを返す。"""
     narrator_dir = tmp_path / 'Narrator'
