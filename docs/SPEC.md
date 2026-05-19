@@ -28,7 +28,8 @@ project root/
 │   │   ├── voice/
 │   │   │   └── voice_manifest.json      # 音声ファイル ↔ テキスト対応記録（初期値）
 │   │   └── image/
-│   │       └── character/               # キャラクター画像置き場
+│   │       └── character/
+│   │           └── {character_name}/    # キャラクターごとの画像置き場
 │   ├── tests/                           # テストディレクトリ
 │   └── tools/
 │       ├── generate_voice/
@@ -49,6 +50,7 @@ project root/
 
 | パス | 区分 | 理由 |
 |------|------|------|
+| `src/resource/image/character/` | キャラクター画像 | 配置する画像アセット（環境依存・大容量想定） |
 | `resource/voice/time_signal/` | 生成音声 | VOICEPEAK が生成するバイナリ（環境依存・大容量） |
 | `resource/voice/clicked/` | 生成音声 | 同上 |
 | `src/tools/generate_voice/input_voices.json` | ツール設定 | 音声生成テキスト定義（環境依存） |
@@ -59,6 +61,20 @@ project root/
 ---
 
 ## ファイル命名規則
+
+キャラクター画像はキャラクター名ごとのサブディレクトリへ格納する。
+
+### character image
+
+```
+src/resource/image/character/{character_name}/{filename}
+```
+
+- `{character_name}`：キャラクター名（例：`Miyamai Moca`）
+- `{filename}`：画像ファイル名（例：`1.png`、`idle.gif`）
+- 例：`src/resource/image/character/Miyamai Moca/1.png`
+
+> アプリは `character/` 配下を再帰的に探索し、拡張子優先順 `gif -> png -> jpg -> jpeg` で最初に見つかった1枚を表示する。
 
 音声ファイルはナレーターごとにサブディレクトリへ格納する。
 
@@ -271,8 +287,9 @@ python list_voices.py --output available_voices.json
 
 ### キャラクター画像
 
-- `src/resource/image/character/` 内の画像を1枚表示
+- `src/resource/image/character/{character_name}/` 配下の画像を1枚表示
 - GIF は無限ループ再生
+- `character/` 配下のサブディレクトリも再帰的に探索する
 - 対応形式：`.png` / `.jpg` / `.jpeg` / `.gif`（GIF 優先）
 
 ### 時報再生

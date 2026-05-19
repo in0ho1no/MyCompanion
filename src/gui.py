@@ -3,10 +3,20 @@
 import asyncio
 import random
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import flet as ft
 
-from media import _find_character_image, _get_clicked_files, _get_time_signal_files, _play_wav
+from media import (
+    _character_dir_exists,
+    _clicked_dir_exists,
+    _find_character_image_by_name,
+    _get_clicked_files_for_character,
+    _get_time_signal_files,
+    _list_character_images,
+    _list_characters,
+    _play_wav,
+)
 
 _TZ_TOKYO = timezone(timedelta(hours=9))
 
@@ -49,16 +59,82 @@ def main(page: ft.Page) -> None:
     ss_text = ft.Text(':00', size=28, color=_C_INK_MUTE, font_family=_MONO)
     date_text = ft.Text('---- -- -- (--)', size=12, weight=ft.FontWeight.W_500, color=_C_INK_SOFT)
 
-    image_path = _find_character_image()
-    if image_path:
-        char_main: ft.Control = ft.Image(src=str(image_path), fit=ft.BoxFit.COVER, expand=True)
-    else:
-        char_main = ft.Container(
+    characters = _list_characters()
+    current_character: str | None = characters[0] if characters else None
+    image_found: list[bool] = [False]
+    current_image_path: list[Path | None] = [None]
+
+    def _reload_hint() -> ft.Text:
+        return ft.Text('wheel click · 再読み込み', size=10, color=_C_INK_MUTE, font_family=_MONO, opacity=0.5)
+
+    def _make_char_content(character: str | None) -> ft.Control:
+        if character is None:
+            image_found[0] = False
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text('9 : 16', size=13, weight=ft.FontWeight.W_500, color=_C_INK, font_family=_MONO),
+                        ft.Text('キャラクターを選択してください', size=12, color=_C_INK_MUTE, font_family=_MONO),
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
+                ),
+                expand=True,
+                alignment=ft.Alignment.CENTER,
+            )
+
+        if not _character_dir_exists(character):
+            image_found[0] = False
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            f'「{character}」のフォルダが\n見つかりません',
+                            size=12,
+                            color=_C_INK_MUTE,
+                            font_family=_MONO,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.Text(
+                            f'resource/image/character/{character}/',
+                            size=11,
+                            color=_C_INK_MUTE,
+                            font_family=_MONO,
+                            opacity=0.6,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        _reload_hint(),
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
+                ),
+                expand=True,
+                alignment=ft.Alignment.CENTER,
+            )
+
+        img = _find_character_image_by_name(character)
+        if img:
+            image_found[0] = True
+            current_image_path[0] = img
+            return ft.Image(src=str(img), fit=ft.BoxFit.COVER, expand=True)
+
+        image_found[0] = False
+        current_image_path[0] = None
+        return ft.Container(
             content=ft.Column(
                 [
                     ft.Text('9 : 16', size=13, weight=ft.FontWeight.W_500, color=_C_INK, font_family=_MONO),
                     ft.Text('drop character image here', size=12, color=_C_INK_MUTE, font_family=_MONO),
-                    ft.Text('resource/image/character/', size=11, color=_C_INK_MUTE, font_family=_MONO, opacity=0.7),
+                    ft.Text(
+                        f'resource/image/character/{character}/<name>.png',
+                        size=11,
+                        color=_C_INK_MUTE,
+                        font_family=_MONO,
+                        opacity=0.7,
+                    ),
+                    _reload_hint(),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -68,20 +144,53 @@ def main(page: ft.Page) -> None:
             alignment=ft.Alignment.CENTER,
         )
 
+    char_image_area = ft.Container(content=_make_char_content(current_character), expand=True)
+
     played_hhmm: set[str] = set()
 
+    def _show_snack(msg: str) -> None:
+        snack = ft.SnackBar(content=ft.Text(msg, color='white'), bgcolor=_C_INK, duration=1800)
+        page.overlay.append(snack)
+        snack.open = True
+
     def on_character_click(_: ft.TapEvent) -> None:
-        files = _get_clicked_files()
-        if not files:
+        if current_character is None:
             return
-        chosen = random.choice(files)
-        _play_wav(chosen)
+        if not _clicked_dir_exists(current_character):
+            _show_snack(f'「{current_character}」の音声フォルダが見つかりません')
+            return
+        files = _get_clicked_files_for_character(current_character)
+        if files:
+            _play_wav(random.choice(files))
+
+    def on_middle_click(_: ft.TapEvent) -> None:
+        if current_character is None:
+            return
+        char_image_area.content = _make_char_content(current_character)
+        msg = '再読み込みしました' if image_found[0] else '再読み込みしました — 画像は見つかりませんでした'
+        _show_snack(msg)
+        page.update()
+
+    def on_right_click(_: ft.Event[ft.GestureDetector]) -> None:
+        if current_character is None or not image_found[0] or current_image_path[0] is None:
+            return
+        images = _list_character_images(current_character)
+        if len(images) <= 1:
+            return
+        try:
+            idx = images.index(current_image_path[0])
+        except ValueError:
+            idx = 0
+        next_img = images[(idx + 1) % len(images)]
+        current_image_path[0] = next_img
+        char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER, expand=True)
+        page.update()
 
     char_container = ft.GestureDetector(
         content=ft.Container(
             content=ft.Stack(
                 [
-                    char_main,
+                    char_image_area,
                     ft.Container(
                         content=ft.Row(
                             [
@@ -119,6 +228,8 @@ def main(page: ft.Page) -> None:
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
         ),
         on_tap=on_character_click,
+        on_secondary_tap=on_right_click,
+        on_tertiary_tap_down=on_middle_click,
     )
 
     clock_card = ft.Container(
@@ -195,17 +306,44 @@ def main(page: ft.Page) -> None:
         expand=True,
     )
 
+    selected_char_label = ft.Text(
+        current_character if current_character else 'キャラクター',
+        size=11,
+        color=_C_INK_SOFT,
+        font_family=_MONO,
+    )
+
+    def on_char_select(e: ft.ControlEvent, name: str) -> None:
+        nonlocal current_character
+        current_character = name
+        selected_char_label.value = name
+        char_image_area.content = _make_char_content(name)
+        page.update()
+
+    if characters:
+        menu_items: list[ft.PopupMenuItem] = [
+            ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(e, n))
+            for name in characters
+        ]
+    else:
+        menu_items = [ft.PopupMenuItem(content='(キャラクターなし)', disabled=True)]
+
+    char_menu = ft.PopupMenuButton(
+        content=ft.Row(
+            [
+                selected_char_label,
+                ft.Text(' ▾', size=11, color=_C_INK_MUTE),
+            ],
+            spacing=0,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        items=menu_items,
+    )
+
     titlebar = ft.Container(
         content=ft.Row(
             [
-                ft.Row(
-                    [
-                        ft.Container(width=12, height=12, bgcolor='#e36b5a', border_radius=6),
-                        ft.Container(width=12, height=12, bgcolor='#e3b85a', border_radius=6),
-                        ft.Container(width=12, height=12, bgcolor='#6ab47b', border_radius=6),
-                    ],
-                    spacing=7,
-                ),
+                ft.Container(content=char_menu, padding=ft.Padding.only(left=4)),
                 ft.Container(
                     content=ft.Text(
                         'MyCompanion  ·  minimal v1',
@@ -216,6 +354,7 @@ def main(page: ft.Page) -> None:
                     expand=True,
                     alignment=ft.Alignment.CENTER,
                 ),
+                ft.Container(width=80),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
