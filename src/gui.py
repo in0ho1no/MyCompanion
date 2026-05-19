@@ -58,9 +58,14 @@ def main(page: ft.Page) -> None:
 
     characters = _list_characters()
     current_character: str | None = characters[0] if characters else None
+    image_found: list[bool] = [False]
+
+    def _reload_hint() -> ft.Text:
+        return ft.Text('wheel click · 再読み込み', size=10, color=_C_INK_MUTE, font_family=_MONO, opacity=0.5)
 
     def _make_char_content(character: str | None) -> ft.Control:
         if character is None:
+            image_found[0] = False
             return ft.Container(
                 content=ft.Column(
                     [
@@ -76,6 +81,7 @@ def main(page: ft.Page) -> None:
             )
 
         if not _character_dir_exists(character):
+            image_found[0] = False
             return ft.Container(
                 content=ft.Column(
                     [
@@ -94,6 +100,7 @@ def main(page: ft.Page) -> None:
                             opacity=0.6,
                             text_align=ft.TextAlign.CENTER,
                         ),
+                        _reload_hint(),
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -105,8 +112,10 @@ def main(page: ft.Page) -> None:
 
         img = _find_character_image_by_name(character)
         if img:
+            image_found[0] = True
             return ft.Image(src=str(img), fit=ft.BoxFit.COVER, expand=True)
 
+        image_found[0] = False
         return ft.Container(
             content=ft.Column(
                 [
@@ -119,6 +128,7 @@ def main(page: ft.Page) -> None:
                         font_family=_MONO,
                         opacity=0.7,
                     ),
+                    _reload_hint(),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -132,12 +142,23 @@ def main(page: ft.Page) -> None:
 
     played_hhmm: set[str] = set()
 
+    def _show_snack(msg: str) -> None:
+        snack = ft.SnackBar(content=ft.Text(msg, color='white'), bgcolor=_C_INK, duration=1800)
+        page.overlay.append(snack)
+        snack.open = True
+
     def on_character_click(_: ft.TapEvent) -> None:
         files = _get_clicked_files()
-        if not files:
+        if files:
+            _play_wav(random.choice(files))
+
+    def on_middle_click(_: ft.TapEvent) -> None:
+        if current_character is None:
             return
-        chosen = random.choice(files)
-        _play_wav(chosen)
+        char_image_area.content = _make_char_content(current_character)
+        msg = '再読み込みしました' if image_found[0] else '再読み込みしました — 画像は見つかりませんでした'
+        _show_snack(msg)
+        page.update()
 
     char_container = ft.GestureDetector(
         content=ft.Container(
@@ -181,6 +202,7 @@ def main(page: ft.Page) -> None:
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
         ),
         on_tap=on_character_click,
+        on_tertiary_tap_down=on_middle_click,
     )
 
     clock_card = ft.Container(
