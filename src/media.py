@@ -8,12 +8,14 @@ _TIME_SIGNAL_DIR = _ROOT / 'resource' / 'voice' / 'time_signal'
 _CLICKED_DIR = _ROOT / 'resource' / 'voice' / 'clicked'
 _IMAGE_DIR = _ROOT / 'resource' / 'image' / 'character'
 
+_IMAGE_EXTS: tuple[str, ...] = ('.gif', '.png', '.jpg', '.jpeg', '.webp')
+
 
 def _find_character_image() -> Path | None:
     """キャラクター画像ファイルを探す。"""
     if not _IMAGE_DIR.exists():
         return None
-    for ext in ('.gif', '.png', '.jpg', '.jpeg'):
+    for ext in _IMAGE_EXTS:
         files = sorted(_IMAGE_DIR.rglob(f'*{ext}'))
         if files:
             return files[0]
@@ -56,7 +58,7 @@ def _find_character_image_by_name(character: str) -> Path | None:
     char_dir = _IMAGE_DIR / character
     if not char_dir.exists():
         return None
-    for ext in ('.gif', '.png', '.jpg', '.jpeg'):
+    for ext in _IMAGE_EXTS:
         files = sorted(char_dir.glob(f'*{ext}'))
         if files:
             return files[0]
@@ -69,6 +71,6 @@ def _list_character_images(character: str) -> list[Path]:
     if not char_dir.exists():
         return []
     images: list[Path] = []
-    for ext in ('.gif', '.png', '.jpg', '.jpeg'):
+    for ext in _IMAGE_EXTS:
         images.extend(char_dir.glob(f'*{ext}'))
     return sorted(images, key=lambda p: p.name)
