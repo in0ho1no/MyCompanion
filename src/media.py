@@ -37,3 +37,27 @@ def _get_clicked_files() -> list[Path]:
     if not _CLICKED_DIR.exists():
         return []
     return sorted(_CLICKED_DIR.rglob('*.wav'))
+
+
+def _list_characters() -> list[str]:
+    """利用可能なキャラクター名一覧を返す。"""
+    if not _IMAGE_DIR.exists():
+        return []
+    return sorted(d.name for d in _IMAGE_DIR.iterdir() if d.is_dir())
+
+
+def _character_dir_exists(character: str) -> bool:
+    """指定キャラクターのフォルダが存在するかを確認する。"""
+    return (_IMAGE_DIR / character).is_dir()
+
+
+def _find_character_image_by_name(character: str) -> Path | None:
+    """指定キャラクターの画像ファイルを探す。"""
+    char_dir = _IMAGE_DIR / character
+    if not char_dir.exists():
+        return None
+    for ext in ('.gif', '.png', '.jpg', '.jpeg'):
+        files = sorted(char_dir.glob(f'*{ext}'))
+        if files:
+            return files[0]
+    return None
