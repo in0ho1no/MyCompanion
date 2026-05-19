@@ -41,6 +41,19 @@ def _get_clicked_files() -> list[Path]:
     return sorted(_CLICKED_DIR.rglob('*.wav'))
 
 
+def _clicked_dir_exists(character: str) -> bool:
+    """指定キャラクターのクリック音声フォルダが存在するかを確認する。"""
+    return (_CLICKED_DIR / character).is_dir()
+
+
+def _get_clicked_files_for_character(character: str) -> list[Path]:
+    """指定キャラクターのクリック時WAVファイル一覧を返す。"""
+    char_dir = _CLICKED_DIR / character
+    if not char_dir.exists():
+        return []
+    return sorted(char_dir.rglob('*.wav'))
+
+
 def _list_characters() -> list[str]:
     """利用可能なキャラクター名一覧を返す。"""
     if not _IMAGE_DIR.exists():

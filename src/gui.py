@@ -9,8 +9,9 @@ import flet as ft
 
 from media import (
     _character_dir_exists,
+    _clicked_dir_exists,
     _find_character_image_by_name,
-    _get_clicked_files,
+    _get_clicked_files_for_character,
     _get_time_signal_files,
     _list_character_images,
     _list_characters,
@@ -153,7 +154,12 @@ def main(page: ft.Page) -> None:
         snack.open = True
 
     def on_character_click(_: ft.TapEvent) -> None:
-        files = _get_clicked_files()
+        if current_character is None:
+            return
+        if not _clicked_dir_exists(current_character):
+            _show_snack(f'「{current_character}」の音声フォルダが見つかりません')
+            return
+        files = _get_clicked_files_for_character(current_character)
         if files:
             _play_wav(random.choice(files))
 

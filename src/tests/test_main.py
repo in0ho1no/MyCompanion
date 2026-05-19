@@ -96,7 +96,7 @@ def test_image_exts_contains_standard_formats() -> None:
 
 
 def test_image_exts_contains_webp() -> None:
-    """webp 形式がサポート対象に含まれている。"""
+    """Webp 形式がサポート対象に含まれている。"""
     assert '.webp' in media._IMAGE_EXTS
 
 
@@ -280,6 +280,85 @@ def test_list_character_images_ignores_non_image_files(tmp_path: Path, monkeypat
     monkeypatch.setattr(media, '_IMAGE_DIR', tmp_path)
 
     assert media._list_character_images('Moca') == [char_dir / 'image.png']
+
+
+# ---------------------------------------------------------------------------
+# _clicked_dir_exists
+# ---------------------------------------------------------------------------
+
+
+def test_clicked_dir_exists_returns_true_for_existing_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """クリック音声ディレクトリが存在するとき True を返す。"""
+    (tmp_path / 'Moca').mkdir()
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    assert media._clicked_dir_exists('Moca') is True
+
+
+def test_clicked_dir_exists_returns_false_for_missing_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """クリック音声ディレクトリが存在しないとき False を返す。"""
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    assert media._clicked_dir_exists('Ghost') is False
+
+
+def test_clicked_dir_exists_returns_false_when_path_is_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """同名のファイルが存在しても False を返す（ディレクトリではないため）。"""
+    (tmp_path / 'Moca').write_bytes(b'x')
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    assert media._clicked_dir_exists('Moca') is False
+
+
+# ---------------------------------------------------------------------------
+# _get_clicked_files_for_character
+# ---------------------------------------------------------------------------
+
+
+def test_get_clicked_files_for_character_returns_empty_when_directory_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """キャラクターディレクトリが存在しなければ空リストを返す。"""
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    assert media._get_clicked_files_for_character('Ghost') == []
+
+
+def test_get_clicked_files_for_character_returns_only_wavs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """WAV ファイルのみを返し、他の拡張子は除外する。"""
+    char_dir = tmp_path / 'Moca'
+    char_dir.mkdir()
+    wav_path = char_dir / 'greeting_001.wav'
+    wav_path.write_bytes(b'wav')
+    (char_dir / 'ignore.txt').write_text('x', encoding='utf-8')
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    assert media._get_clicked_files_for_character('Moca') == [wav_path]
+
+
+def test_get_clicked_files_for_character_returns_sorted_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """複数ファイルをパス昇順で返す。"""
+    char_dir = tmp_path / 'Moca'
+    char_dir.mkdir()
+    paths = [char_dir / f'{name}.wav' for name in ('shy_001', 'greeting_001', 'idle_001')]
+    for p in paths:
+        p.write_bytes(b'wav')
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    result = media._get_clicked_files_for_character('Moca')
+
+    assert result == sorted(paths)
+
+
+def test_get_clicked_files_for_character_does_not_include_other_characters(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """選択キャラクター以外の音声ファイルは含めない。"""
+    (tmp_path / 'Moca').mkdir()
+    (tmp_path / 'Moca' / 'greeting_001.wav').write_bytes(b'wav')
+    (tmp_path / 'COKO').mkdir()
+    (tmp_path / 'COKO' / 'hello_001.wav').write_bytes(b'wav')
+    monkeypatch.setattr(media, '_CLICKED_DIR', tmp_path)
+
+    result = media._get_clicked_files_for_character('Moca')
+
+    assert result == [tmp_path / 'Moca' / 'greeting_001.wav']
 
 
 def test_list_character_images_sorts_across_extensions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
