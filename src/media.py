@@ -61,3 +61,14 @@ def _find_character_image_by_name(character: str) -> Path | None:
         if files:
             return files[0]
     return None
+
+
+def _list_character_images(character: str) -> list[Path]:
+    """指定キャラクターの画像ファイルをファイル名昇順で返す。"""
+    char_dir = _IMAGE_DIR / character
+    if not char_dir.exists():
+        return []
+    images: list[Path] = []
+    for ext in ('.gif', '.png', '.jpg', '.jpeg'):
+        images.extend(char_dir.glob(f'*{ext}'))
+    return sorted(images, key=lambda p: p.name)

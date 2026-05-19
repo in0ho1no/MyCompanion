@@ -3,6 +3,7 @@
 import asyncio
 import random
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import flet as ft
 
@@ -11,6 +12,7 @@ from media import (
     _find_character_image_by_name,
     _get_clicked_files,
     _get_time_signal_files,
+    _list_character_images,
     _list_characters,
     _play_wav,
 )
@@ -59,6 +61,7 @@ def main(page: ft.Page) -> None:
     characters = _list_characters()
     current_character: str | None = characters[0] if characters else None
     image_found: list[bool] = [False]
+    current_image_path: list[Path | None] = [None]
 
     def _reload_hint() -> ft.Text:
         return ft.Text('wheel click · 再読み込み', size=10, color=_C_INK_MUTE, font_family=_MONO, opacity=0.5)
@@ -113,9 +116,11 @@ def main(page: ft.Page) -> None:
         img = _find_character_image_by_name(character)
         if img:
             image_found[0] = True
+            current_image_path[0] = img
             return ft.Image(src=str(img), fit=ft.BoxFit.COVER, expand=True)
 
         image_found[0] = False
+        current_image_path[0] = None
         return ft.Container(
             content=ft.Column(
                 [
@@ -160,6 +165,21 @@ def main(page: ft.Page) -> None:
         _show_snack(msg)
         page.update()
 
+    def on_right_click(_: ft.Event[ft.GestureDetector]) -> None:
+        if current_character is None or not image_found[0] or current_image_path[0] is None:
+            return
+        images = _list_character_images(current_character)
+        if len(images) <= 1:
+            return
+        try:
+            idx = images.index(current_image_path[0])
+        except ValueError:
+            idx = 0
+        next_img = images[(idx + 1) % len(images)]
+        current_image_path[0] = next_img
+        char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER, expand=True)
+        page.update()
+
     char_container = ft.GestureDetector(
         content=ft.Container(
             content=ft.Stack(
@@ -202,6 +222,7 @@ def main(page: ft.Page) -> None:
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
         ),
         on_tap=on_character_click,
+        on_secondary_tap=on_right_click,
         on_tertiary_tap_down=on_middle_click,
     )
 
