@@ -233,32 +233,6 @@ def main(page: ft.Page) -> None:
             content=ft.Stack(
                 [
                     char_image_area,
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Text('character', size=11, color=_C_INK_MUTE, font_family=_MONO),
-                                ft.Container(width=6, height=6, bgcolor=_C_ACCENT, border_radius=3),
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        padding=ft.Padding.all(12),
-                        top=0,
-                        left=0,
-                        right=0,
-                    ),
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Text('idle', size=11, color=_C_INK_MUTE, font_family=_MONO),
-                                ft.Text('v1', size=11, color=_C_INK_MUTE, font_family=_MONO),
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        padding=ft.Padding.all(12),
-                        bottom=0,
-                        left=0,
-                        right=0,
-                    ),
                 ],
                 expand=True,
             ),
@@ -384,17 +358,6 @@ def main(page: ft.Page) -> None:
         content=ft.Row(
             [
                 ft.Container(content=char_menu, padding=ft.Padding.only(left=4)),
-                ft.Container(
-                    content=ft.Text(
-                        'MyCompanion  ·  minimal v1',
-                        size=12,
-                        color=_C_INK_SOFT,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    expand=True,
-                    alignment=ft.Alignment.CENTER,
-                ),
-                ft.Container(width=80),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
