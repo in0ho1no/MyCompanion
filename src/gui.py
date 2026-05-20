@@ -355,7 +355,7 @@ def main(page: ft.Page) -> None:
         font_family=_MONO,
     )
 
-    def on_char_select(e: ft.ControlEvent, name: str) -> None:
+    def on_char_select(name: str) -> None:
         nonlocal current_character
         current_character = name
         _save_selected_character(current_character)
@@ -364,7 +364,7 @@ def main(page: ft.Page) -> None:
         page.update()
 
     if characters:
-        menu_items: list[ft.PopupMenuItem] = [ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(e, n)) for name in characters]
+        menu_items: list[ft.PopupMenuItem] = [ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(n)) for name in characters]
     else:
         menu_items = [ft.PopupMenuItem(content='(キャラクターなし)', disabled=True)]
 
