@@ -1,16 +1,19 @@
 """Flet GUI の構築とイベント処理。"""
 
 import asyncio
+import json
 import random
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import flet as ft
 
 from media import (
     _character_dir_exists,
     _clicked_dir_exists,
-    _find_character_image_by_name,
     _get_clicked_files_for_character,
     _get_time_signal_files,
     _list_character_images,
@@ -42,10 +45,112 @@ _C_ACCENT = '#b5722d'
 
 _WEEKDAY_JA = ['月', '火', '水', '木', '金', '土', '日']
 _MONO = 'Consolas'
+_STATE_FILE = Path(__file__).with_name('.mycompanion_state.json')
 
 
-def main(page: ft.Page) -> None:
-    """Fletアプリのエントリポイント。"""
+@dataclass
+class _GuiView:
+    """テストから主要コントロールへアクセスするための GUI 参照。"""
+
+    root: ft.Control
+    startup_message: str | None
+    clock_loop: Callable[[], Awaitable[None]]
+    char_container: ft.GestureDetector
+    char_menu: ft.PopupMenuButton
+    char_image_area: ft.Container
+    selected_char_label: ft.Text
+    select_character: Callable[[str], None]
+    reload_image: Callable[[], None]
+    cycle_image: Callable[[], None]
+
+
+def _load_ui_state(state_file: Path = _STATE_FILE) -> dict[str, str | None]:
+    """保存済み UI 状態を返す。"""
+    try:
+        raw = json.loads(state_file.read_text(encoding='utf-8'))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {'selected_character': None, 'selected_image': None}
+
+    if isinstance(raw, str):
+        return {'selected_character': raw or None, 'selected_image': None}
+    if not isinstance(raw, dict):
+        return {'selected_character': None, 'selected_image': None}
+
+    selected_character = raw.get('selected_character')
+    selected_image = raw.get('selected_image')
+    return {
+        'selected_character': selected_character if isinstance(selected_character, str) and selected_character else None,
+        'selected_image': selected_image if isinstance(selected_image, str) and selected_image else None,
+    }
+
+
+def _load_selected_character(state_file: Path = _STATE_FILE) -> str | None:
+    """保存済みの選択キャラクター名を返す。"""
+    return _load_ui_state(state_file)['selected_character']
+
+
+def _load_selected_image(state_file: Path = _STATE_FILE) -> str | None:
+    """保存済みの選択画像ファイル名を返す。"""
+    return _load_ui_state(state_file)['selected_image']
+
+
+def _save_ui_state(
+    character: str | None,
+    image_name: str | None,
+    state_file: Path = _STATE_FILE,
+) -> None:
+    """選択中の UI 状態を状態ファイルへ保存する。"""
+    try:
+        state_file.write_text(
+            json.dumps(
+                {
+                    'selected_character': character,
+                    'selected_image': image_name,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding='utf-8',
+        )
+    except OSError:
+        return
+
+
+def _save_selected_character(character: str | None, state_file: Path = _STATE_FILE) -> None:
+    """選択中キャラクター名を状態ファイルへ保存する。"""
+    selected_image = _load_selected_image(state_file)
+    _save_ui_state(character, selected_image, state_file)
+
+
+def _resolve_initial_character(characters: list[str], previous_character: str | None) -> tuple[str | None, str | None]:
+    """起動時の選択キャラクターと必要な通知メッセージを返す。"""
+    if not characters:
+        return None, None
+    if previous_character is None:
+        return characters[0], None
+    if previous_character in characters:
+        return previous_character, None
+
+    fallback_character = characters[0]
+    message = f'前回選択していた「{previous_character}」が存在しません。代わりに「{fallback_character}」を選択しました'
+    return fallback_character, message
+
+
+def _resolve_image_path(images: list[Path], previous_image_name: str | None) -> Path | None:
+    """起動時または再描画時に表示すべき画像を返す。"""
+    if not images:
+        return None
+    if previous_image_name is None:
+        return images[0]
+
+    for image in images:
+        if image.name == previous_image_name:
+            return image
+    return images[0]
+
+
+def _configure_page(page: Any) -> None:
+    """ページの基本設定を適用する。"""
     page.title = 'MyCompanion'
     page.window.always_on_top = True
     page.window.width = _WIN_W
@@ -55,21 +160,30 @@ def main(page: ft.Page) -> None:
     page.bgcolor = _C_BG_WINDOW
     page.padding = 0
 
+
+def _build_gui(page: Any) -> _GuiView:
+    """GUI を構築し、主要コントロール参照を返す。"""
     hhmm_text = ft.Text('00:00', size=56, weight=ft.FontWeight.W_500, color=_C_INK, font_family=_MONO)
     ss_text = ft.Text(':00', size=28, color=_C_INK_MUTE, font_family=_MONO)
     date_text = ft.Text('---- -- -- (--)', size=12, weight=ft.FontWeight.W_500, color=_C_INK_SOFT)
 
     characters = _list_characters()
-    current_character: str | None = characters[0] if characters else None
+    ui_state = _load_ui_state()
+    previous_character = ui_state['selected_character']
+    previous_image_name = ui_state['selected_image']
+    current_character, startup_message = _resolve_initial_character(characters, previous_character)
     image_found: list[bool] = [False]
     current_image_path: list[Path | None] = [None]
+    selected_image_name: list[str | None] = [previous_image_name if current_character == previous_character else None]
 
     def _reload_hint() -> ft.Text:
         return ft.Text('wheel click · 再読み込み', size=10, color=_C_INK_MUTE, font_family=_MONO, opacity=0.5)
 
-    def _make_char_content(character: str | None) -> ft.Control:
+    def _make_char_content(character: str | None, preferred_image_name: str | None = None) -> ft.Control:
         if character is None:
             image_found[0] = False
+            current_image_path[0] = None
+            selected_image_name[0] = None
             return ft.Container(
                 content=ft.Column(
                     [
@@ -86,6 +200,8 @@ def main(page: ft.Page) -> None:
 
         if not _character_dir_exists(character):
             image_found[0] = False
+            current_image_path[0] = None
+            selected_image_name[0] = None
             return ft.Container(
                 content=ft.Column(
                     [
@@ -114,14 +230,17 @@ def main(page: ft.Page) -> None:
                 alignment=ft.Alignment.CENTER,
             )
 
-        img = _find_character_image_by_name(character)
+        images = _list_character_images(character)
+        img = _resolve_image_path(images, preferred_image_name)
         if img:
             image_found[0] = True
             current_image_path[0] = img
-            return ft.Image(src=str(img), fit=ft.BoxFit.COVER, expand=True)
+            selected_image_name[0] = img.name
+            return ft.Image(src=str(img), fit=ft.BoxFit.COVER)
 
         image_found[0] = False
         current_image_path[0] = None
+        selected_image_name[0] = None
         return ft.Container(
             content=ft.Column(
                 [
@@ -144,7 +263,12 @@ def main(page: ft.Page) -> None:
             alignment=ft.Alignment.CENTER,
         )
 
-    char_image_area = ft.Container(content=_make_char_content(current_character), expand=True)
+    char_image_area = ft.Container(
+        content=_make_char_content(current_character, selected_image_name[0]),
+        expand=True,
+        alignment=ft.Alignment.CENTER,
+    )
+    _save_ui_state(current_character, selected_image_name[0])
 
     played_hhmm: set[str] = set()
 
@@ -163,15 +287,19 @@ def main(page: ft.Page) -> None:
         if files:
             _play_wav(random.choice(files))
 
-    def on_middle_click(_: ft.TapEvent) -> None:
+    def reload_image() -> None:
         if current_character is None:
             return
         char_image_area.content = _make_char_content(current_character)
+        _save_ui_state(current_character, selected_image_name[0])
         msg = '再読み込みしました' if image_found[0] else '再読み込みしました — 画像は見つかりませんでした'
         _show_snack(msg)
         page.update()
 
-    def on_right_click(_: ft.Event[ft.GestureDetector]) -> None:
+    def on_middle_click(_: ft.TapEvent) -> None:
+        reload_image()
+
+    def cycle_image() -> None:
         if current_character is None or not image_found[0] or current_image_path[0] is None:
             return
         images = _list_character_images(current_character)
@@ -183,40 +311,19 @@ def main(page: ft.Page) -> None:
             idx = 0
         next_img = images[(idx + 1) % len(images)]
         current_image_path[0] = next_img
-        char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER, expand=True)
+        selected_image_name[0] = next_img.name
+        _save_ui_state(current_character, selected_image_name[0])
+        char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER)
         page.update()
+
+    def on_right_click(_: ft.Event[ft.GestureDetector]) -> None:
+        cycle_image()
 
     char_container = ft.GestureDetector(
         content=ft.Container(
             content=ft.Stack(
                 [
                     char_image_area,
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Text('character', size=11, color=_C_INK_MUTE, font_family=_MONO),
-                                ft.Container(width=6, height=6, bgcolor=_C_ACCENT, border_radius=3),
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        padding=ft.Padding.all(12),
-                        top=0,
-                        left=0,
-                        right=0,
-                    ),
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Text('idle', size=11, color=_C_INK_MUTE, font_family=_MONO),
-                                ft.Text('v1', size=11, color=_C_INK_MUTE, font_family=_MONO),
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        padding=ft.Padding.all(12),
-                        bottom=0,
-                        left=0,
-                        right=0,
-                    ),
                 ],
                 expand=True,
             ),
@@ -313,18 +420,16 @@ def main(page: ft.Page) -> None:
         font_family=_MONO,
     )
 
-    def on_char_select(e: ft.ControlEvent, name: str) -> None:
+    def on_char_select(name: str) -> None:
         nonlocal current_character
         current_character = name
         selected_char_label.value = name
         char_image_area.content = _make_char_content(name)
+        _save_ui_state(current_character, selected_image_name[0])
         page.update()
 
     if characters:
-        menu_items: list[ft.PopupMenuItem] = [
-            ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(e, n))
-            for name in characters
-        ]
+        menu_items: list[ft.PopupMenuItem] = [ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(n)) for name in characters]
     else:
         menu_items = [ft.PopupMenuItem(content='(キャラクターなし)', disabled=True)]
 
@@ -344,17 +449,6 @@ def main(page: ft.Page) -> None:
         content=ft.Row(
             [
                 ft.Container(content=char_menu, padding=ft.Padding.only(left=4)),
-                ft.Container(
-                    content=ft.Text(
-                        'MyCompanion  ·  minimal v1',
-                        size=12,
-                        color=_C_INK_SOFT,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    expand=True,
-                    alignment=ft.Alignment.CENTER,
-                ),
-                ft.Container(width=80),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
@@ -364,26 +458,24 @@ def main(page: ft.Page) -> None:
         border=ft.Border.only(bottom=ft.BorderSide(1, _C_LINE)),
     )
 
-    page.add(
-        ft.Column(
-            [
-                titlebar,
-                ft.Container(
-                    content=ft.Row(
-                        [
-                            char_container,
-                            ft.Container(width=_GAP),
-                            right_col,
-                        ],
-                        spacing=0,
-                    ),
-                    padding=ft.Padding.only(left=_PADDING, right=_PADDING, top=_PADDING, bottom=_PADDING),
-                    expand=True,
+    root = ft.Column(
+        [
+            titlebar,
+            ft.Container(
+                content=ft.Row(
+                    [
+                        char_container,
+                        ft.Container(width=_GAP),
+                        right_col,
+                    ],
+                    spacing=0,
                 ),
-            ],
-            spacing=0,
-            expand=True,
-        )
+                padding=ft.Padding.only(left=_PADDING, right=_PADDING, top=_PADDING, bottom=_PADDING),
+                expand=True,
+            ),
+        ],
+        spacing=0,
+        expand=True,
     )
 
     async def clock_loop() -> None:
@@ -402,4 +494,29 @@ def main(page: ft.Page) -> None:
                     _play_wav(chosen)
             await asyncio.sleep(1)
 
-    page.run_task(clock_loop)
+    return _GuiView(
+        root=root,
+        startup_message=startup_message,
+        clock_loop=clock_loop,
+        char_container=char_container,
+        char_menu=char_menu,
+        char_image_area=char_image_area,
+        selected_char_label=selected_char_label,
+        select_character=on_char_select,
+        reload_image=reload_image,
+        cycle_image=cycle_image,
+    )
+
+
+def main(page: ft.Page) -> None:
+    """Fletアプリのエントリポイント。"""
+    _configure_page(page)
+    gui_view = _build_gui(page)
+    page.add(gui_view.root)
+
+    if gui_view.startup_message is not None:
+        snack = ft.SnackBar(content=ft.Text(gui_view.startup_message, color='white'), bgcolor=_C_INK, duration=1800)
+        page.overlay.append(snack)
+        snack.open = True
+
+    page.run_task(gui_view.clock_loop)
