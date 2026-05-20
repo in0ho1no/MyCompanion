@@ -11,7 +11,6 @@ import flet as ft
 from media import (
     _character_dir_exists,
     _clicked_dir_exists,
-    _find_character_image_by_name,
     _get_clicked_files_for_character,
     _get_time_signal_files,
     _list_character_images,
@@ -46,28 +45,62 @@ _MONO = 'Consolas'
 _STATE_FILE = Path(__file__).with_name('.mycompanion_state.json')
 
 
-def _load_selected_character(state_file: Path = _STATE_FILE) -> str | None:
-    """保存済みの選択キャラクター名を返す。"""
+def _load_ui_state(state_file: Path = _STATE_FILE) -> dict[str, str | None]:
+    """保存済み UI 状態を返す。"""
     try:
         raw = json.loads(state_file.read_text(encoding='utf-8'))
     except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return None
+        return {'selected_character': None, 'selected_image': None}
+
+    if isinstance(raw, str):
+        return {'selected_character': raw or None, 'selected_image': None}
+    if not isinstance(raw, dict):
+        return {'selected_character': None, 'selected_image': None}
 
     selected_character = raw.get('selected_character')
-    if isinstance(selected_character, str) and selected_character:
-        return selected_character
-    return None
+    selected_image = raw.get('selected_image')
+    return {
+        'selected_character': selected_character if isinstance(selected_character, str) and selected_character else None,
+        'selected_image': selected_image if isinstance(selected_image, str) and selected_image else None,
+    }
 
 
-def _save_selected_character(character: str | None, state_file: Path = _STATE_FILE) -> None:
-    """選択中キャラクター名を状態ファイルへ保存する。"""
+def _load_selected_character(state_file: Path = _STATE_FILE) -> str | None:
+    """保存済みの選択キャラクター名を返す。"""
+    return _load_ui_state(state_file)['selected_character']
+
+
+def _load_selected_image(state_file: Path = _STATE_FILE) -> str | None:
+    """保存済みの選択画像ファイル名を返す。"""
+    return _load_ui_state(state_file)['selected_image']
+
+
+def _save_ui_state(
+    character: str | None,
+    image_name: str | None,
+    state_file: Path = _STATE_FILE,
+) -> None:
+    """選択中の UI 状態を状態ファイルへ保存する。"""
     try:
         state_file.write_text(
-            json.dumps({'selected_character': character}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {
+                    'selected_character': character,
+                    'selected_image': image_name,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding='utf-8',
         )
     except OSError:
         return
+
+
+def _save_selected_character(character: str | None, state_file: Path = _STATE_FILE) -> None:
+    """選択中キャラクター名を状態ファイルへ保存する。"""
+    selected_image = _load_selected_image(state_file)
+    _save_ui_state(character, selected_image, state_file)
 
 
 def _resolve_initial_character(characters: list[str], previous_character: str | None) -> tuple[str | None, str | None]:
@@ -82,6 +115,19 @@ def _resolve_initial_character(characters: list[str], previous_character: str | 
     fallback_character = characters[0]
     message = f'前回選択していた「{previous_character}」が存在しません。代わりに「{fallback_character}」を選択しました'
     return fallback_character, message
+
+
+def _resolve_image_path(images: list[Path], previous_image_name: str | None) -> Path | None:
+    """起動時または再描画時に表示すべき画像を返す。"""
+    if not images:
+        return None
+    if previous_image_name is None:
+        return images[0]
+
+    for image in images:
+        if image.name == previous_image_name:
+            return image
+    return images[0]
 
 
 def main(page: ft.Page) -> None:
@@ -100,18 +146,22 @@ def main(page: ft.Page) -> None:
     date_text = ft.Text('---- -- -- (--)', size=12, weight=ft.FontWeight.W_500, color=_C_INK_SOFT)
 
     characters = _list_characters()
-    previous_character = _load_selected_character()
+    ui_state = _load_ui_state()
+    previous_character = ui_state['selected_character']
+    previous_image_name = ui_state['selected_image']
     current_character, startup_message = _resolve_initial_character(characters, previous_character)
-    _save_selected_character(current_character)
     image_found: list[bool] = [False]
     current_image_path: list[Path | None] = [None]
+    selected_image_name: list[str | None] = [previous_image_name if current_character == previous_character else None]
 
     def _reload_hint() -> ft.Text:
         return ft.Text('wheel click · 再読み込み', size=10, color=_C_INK_MUTE, font_family=_MONO, opacity=0.5)
 
-    def _make_char_content(character: str | None) -> ft.Control:
+    def _make_char_content(character: str | None, preferred_image_name: str | None = None) -> ft.Control:
         if character is None:
             image_found[0] = False
+            current_image_path[0] = None
+            selected_image_name[0] = None
             return ft.Container(
                 content=ft.Column(
                     [
@@ -128,6 +178,8 @@ def main(page: ft.Page) -> None:
 
         if not _character_dir_exists(character):
             image_found[0] = False
+            current_image_path[0] = None
+            selected_image_name[0] = None
             return ft.Container(
                 content=ft.Column(
                     [
@@ -156,14 +208,17 @@ def main(page: ft.Page) -> None:
                 alignment=ft.Alignment.CENTER,
             )
 
-        img = _find_character_image_by_name(character)
+        images = _list_character_images(character)
+        img = _resolve_image_path(images, preferred_image_name)
         if img:
             image_found[0] = True
             current_image_path[0] = img
-            return ft.Image(src=str(img), fit=ft.BoxFit.COVER, expand=True)
+            selected_image_name[0] = img.name
+            return ft.Image(src=str(img), fit=ft.BoxFit.COVER)
 
         image_found[0] = False
         current_image_path[0] = None
+        selected_image_name[0] = None
         return ft.Container(
             content=ft.Column(
                 [
@@ -186,7 +241,12 @@ def main(page: ft.Page) -> None:
             alignment=ft.Alignment.CENTER,
         )
 
-    char_image_area = ft.Container(content=_make_char_content(current_character), expand=True)
+    char_image_area = ft.Container(
+        content=_make_char_content(current_character, selected_image_name[0]),
+        expand=True,
+        alignment=ft.Alignment.CENTER,
+    )
+    _save_ui_state(current_character, selected_image_name[0])
 
     played_hhmm: set[str] = set()
 
@@ -209,6 +269,7 @@ def main(page: ft.Page) -> None:
         if current_character is None:
             return
         char_image_area.content = _make_char_content(current_character)
+        _save_ui_state(current_character, selected_image_name[0])
         msg = '再読み込みしました' if image_found[0] else '再読み込みしました — 画像は見つかりませんでした'
         _show_snack(msg)
         page.update()
@@ -225,7 +286,9 @@ def main(page: ft.Page) -> None:
             idx = 0
         next_img = images[(idx + 1) % len(images)]
         current_image_path[0] = next_img
-        char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER, expand=True)
+        selected_image_name[0] = next_img.name
+        _save_ui_state(current_character, selected_image_name[0])
+        char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER)
         page.update()
 
     char_container = ft.GestureDetector(
@@ -332,9 +395,9 @@ def main(page: ft.Page) -> None:
     def on_char_select(name: str) -> None:
         nonlocal current_character
         current_character = name
-        _save_selected_character(current_character)
         selected_char_label.value = name
         char_image_area.content = _make_char_content(name)
+        _save_ui_state(current_character, selected_image_name[0])
         page.update()
 
     if characters:
