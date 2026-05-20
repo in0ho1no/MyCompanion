@@ -1,9 +1,10 @@
 """gui モジュールのテスト。"""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import flet as ft
 import pytest
@@ -220,3 +221,39 @@ def test_character_image_handlers_cycle_and_reload_images(monkeypatch: pytest.Mo
     assert isinstance(view.char_image_area.content, ft.Image)
     assert view.char_image_area.content.src == 'COKO\\01.png'
     assert saved_states[-1] == ('COKO', '01.png')
+
+
+def test_wheel_click_handler_reloads_first_image_and_shows_snack(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ホイールクリックイベントで画像を先頭へ戻し、通知を表示する。"""
+    page = _FakePage()
+    saved_states: list[tuple[str | None, str | None]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': '01.png'},
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(
+        gui,
+        '_list_character_images',
+        lambda character: [Path('COKO/01.png'), Path('COKO/02.png')],
+    )
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: saved_states.append((character, image_name)))
+
+    view = gui._build_gui(page)
+    view.cycle_image()
+
+    assert view.char_container.on_tertiary_tap_down is not None
+    wheel_click_handler = cast(Callable[[object], None], view.char_container.on_tertiary_tap_down)
+    wheel_click_handler(SimpleNamespace())
+
+    assert isinstance(view.char_image_area.content, ft.Image)
+    assert view.char_image_area.content.src == 'COKO\\01.png'
+    assert saved_states[-1] == ('COKO', '01.png')
+    assert len(page.overlay) == 1
+    snack = cast(ft.SnackBar, page.overlay[0])
+    assert snack.open is True
+    assert isinstance(snack.content, ft.Text)
+    assert snack.content.value == '再読み込みしました'
