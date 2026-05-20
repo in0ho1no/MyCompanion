@@ -3,8 +3,11 @@
 import asyncio
 import json
 import random
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import flet as ft
 
@@ -43,6 +46,22 @@ _C_ACCENT = '#b5722d'
 _WEEKDAY_JA = ['月', '火', '水', '木', '金', '土', '日']
 _MONO = 'Consolas'
 _STATE_FILE = Path(__file__).with_name('.mycompanion_state.json')
+
+
+@dataclass
+class _GuiView:
+    """テストから主要コントロールへアクセスするための GUI 参照。"""
+
+    root: ft.Control
+    startup_message: str | None
+    clock_loop: Callable[[], Awaitable[None]]
+    char_container: ft.GestureDetector
+    char_menu: ft.PopupMenuButton
+    char_image_area: ft.Container
+    selected_char_label: ft.Text
+    select_character: Callable[[str], None]
+    reload_image: Callable[[], None]
+    cycle_image: Callable[[], None]
 
 
 def _load_ui_state(state_file: Path = _STATE_FILE) -> dict[str, str | None]:
@@ -130,8 +149,8 @@ def _resolve_image_path(images: list[Path], previous_image_name: str | None) -> 
     return images[0]
 
 
-def main(page: ft.Page) -> None:
-    """Fletアプリのエントリポイント。"""
+def _configure_page(page: Any) -> None:
+    """ページの基本設定を適用する。"""
     page.title = 'MyCompanion'
     page.window.always_on_top = True
     page.window.width = _WIN_W
@@ -141,6 +160,9 @@ def main(page: ft.Page) -> None:
     page.bgcolor = _C_BG_WINDOW
     page.padding = 0
 
+
+def _build_gui(page: Any) -> _GuiView:
+    """GUI を構築し、主要コントロール参照を返す。"""
     hhmm_text = ft.Text('00:00', size=56, weight=ft.FontWeight.W_500, color=_C_INK, font_family=_MONO)
     ss_text = ft.Text(':00', size=28, color=_C_INK_MUTE, font_family=_MONO)
     date_text = ft.Text('---- -- -- (--)', size=12, weight=ft.FontWeight.W_500, color=_C_INK_SOFT)
@@ -265,7 +287,7 @@ def main(page: ft.Page) -> None:
         if files:
             _play_wav(random.choice(files))
 
-    def on_middle_click(_: ft.TapEvent) -> None:
+    def reload_image() -> None:
         if current_character is None:
             return
         char_image_area.content = _make_char_content(current_character)
@@ -274,7 +296,10 @@ def main(page: ft.Page) -> None:
         _show_snack(msg)
         page.update()
 
-    def on_right_click(_: ft.Event[ft.GestureDetector]) -> None:
+    def on_middle_click(_: ft.TapEvent) -> None:
+        reload_image()
+
+    def cycle_image() -> None:
         if current_character is None or not image_found[0] or current_image_path[0] is None:
             return
         images = _list_character_images(current_character)
@@ -290,6 +315,9 @@ def main(page: ft.Page) -> None:
         _save_ui_state(current_character, selected_image_name[0])
         char_image_area.content = ft.Image(src=str(next_img), fit=ft.BoxFit.COVER)
         page.update()
+
+    def on_right_click(_: ft.Event[ft.GestureDetector]) -> None:
+        cycle_image()
 
     char_container = ft.GestureDetector(
         content=ft.Container(
@@ -430,30 +458,25 @@ def main(page: ft.Page) -> None:
         border=ft.Border.only(bottom=ft.BorderSide(1, _C_LINE)),
     )
 
-    page.add(
-        ft.Column(
-            [
-                titlebar,
-                ft.Container(
-                    content=ft.Row(
-                        [
-                            char_container,
-                            ft.Container(width=_GAP),
-                            right_col,
-                        ],
-                        spacing=0,
-                    ),
-                    padding=ft.Padding.only(left=_PADDING, right=_PADDING, top=_PADDING, bottom=_PADDING),
-                    expand=True,
+    root = ft.Column(
+        [
+            titlebar,
+            ft.Container(
+                content=ft.Row(
+                    [
+                        char_container,
+                        ft.Container(width=_GAP),
+                        right_col,
+                    ],
+                    spacing=0,
                 ),
-            ],
-            spacing=0,
-            expand=True,
-        )
+                padding=ft.Padding.only(left=_PADDING, right=_PADDING, top=_PADDING, bottom=_PADDING),
+                expand=True,
+            ),
+        ],
+        spacing=0,
+        expand=True,
     )
-
-    if startup_message is not None:
-        _show_snack(startup_message)
 
     async def clock_loop() -> None:
         while True:
@@ -471,4 +494,29 @@ def main(page: ft.Page) -> None:
                     _play_wav(chosen)
             await asyncio.sleep(1)
 
-    page.run_task(clock_loop)
+    return _GuiView(
+        root=root,
+        startup_message=startup_message,
+        clock_loop=clock_loop,
+        char_container=char_container,
+        char_menu=char_menu,
+        char_image_area=char_image_area,
+        selected_char_label=selected_char_label,
+        select_character=on_char_select,
+        reload_image=reload_image,
+        cycle_image=cycle_image,
+    )
+
+
+def main(page: ft.Page) -> None:
+    """Fletアプリのエントリポイント。"""
+    _configure_page(page)
+    gui_view = _build_gui(page)
+    page.add(gui_view.root)
+
+    if gui_view.startup_message is not None:
+        snack = ft.SnackBar(content=ft.Text(gui_view.startup_message, color='white'), bgcolor=_C_INK, duration=1800)
+        page.overlay.append(snack)
+        snack.open = True
+
+    page.run_task(gui_view.clock_loop)

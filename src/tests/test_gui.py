@@ -1,8 +1,45 @@
 """gui モジュールのテスト。"""
 
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import flet as ft
+import pytest
 
 import gui
+
+
+@dataclass
+class _FakePage:
+    """GUI 組み立てテスト向けの簡易 Page。"""
+
+    overlay: list[Any] = field(default_factory=list)
+    controls: list[ft.Control] = field(default_factory=list)
+    updated: int = 0
+    tasks: list[Any] = field(default_factory=list)
+    title: str = ''
+    bgcolor: str | None = None
+    padding: int | None = None
+    window: SimpleNamespace = field(
+        default_factory=lambda: SimpleNamespace(
+            always_on_top=False,
+            width=0,
+            height=0,
+            maximizable=True,
+            resizable=True,
+        )
+    )
+
+    def add(self, *controls: ft.Control) -> None:
+        self.controls.extend(controls)
+
+    def update(self) -> None:
+        self.updated += 1
+
+    def run_task(self, task: Any) -> None:
+        self.tasks.append(task)
 
 
 def test_load_selected_character_returns_none_when_file_missing(tmp_path: Path) -> None:
@@ -92,3 +129,94 @@ def test_resolve_image_path_falls_back_to_first_image_when_missing(tmp_path: Pat
     selected = gui._resolve_image_path(images, '99.png')
 
     assert selected == tmp_path / '01.png'
+
+
+def test_build_gui_restores_selected_character_and_image(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GUI 構築時に前回のキャラクターと画像を復元する。"""
+    page = _FakePage()
+    saved_states: list[tuple[str | None, str | None]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO', 'SEKAI'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'SEKAI', 'selected_image': '02.png'},
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(
+        gui,
+        '_list_character_images',
+        lambda character: [Path(f'{character}/01.png'), Path(f'{character}/02.png')],
+    )
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: saved_states.append((character, image_name)))
+
+    view = gui._build_gui(page)
+
+    assert view.selected_char_label.value == 'SEKAI'
+    assert view.char_image_area.alignment == ft.Alignment.CENTER
+    assert isinstance(view.char_image_area.content, ft.Image)
+    assert view.char_image_area.content.src == 'SEKAI\\02.png'
+    assert saved_states[-1] == ('SEKAI', '02.png')
+
+
+def test_character_menu_click_updates_image_and_persists_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """キャラクター選択で画像と保存状態が更新される。"""
+    page = _FakePage()
+    saved_states: list[tuple[str | None, str | None]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO', 'SEKAI'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': None, 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(
+        gui,
+        '_list_character_images',
+        lambda character: [Path(f'{character}/01.png'), Path(f'{character}/02.png')] if character == 'COKO' else [Path('SEKAI/10.png')],
+    )
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: saved_states.append((character, image_name)))
+
+    view = gui._build_gui(page)
+    view.select_character('SEKAI')
+
+    assert view.selected_char_label.value == 'SEKAI'
+    assert isinstance(view.char_image_area.content, ft.Image)
+    assert view.char_image_area.content.src == 'SEKAI\\10.png'
+    assert saved_states[-1] == ('SEKAI', '10.png')
+    assert page.updated == 1
+
+
+def test_character_image_handlers_cycle_and_reload_images(monkeypatch: pytest.MonkeyPatch) -> None:
+    """右クリックで次画像へ進み、中クリックで先頭画像へ戻す。"""
+    page = _FakePage()
+    saved_states: list[tuple[str | None, str | None]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': '01.png'},
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(
+        gui,
+        '_list_character_images',
+        lambda character: [Path('COKO/01.png'), Path('COKO/02.png')],
+    )
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: saved_states.append((character, image_name)))
+
+    view = gui._build_gui(page)
+
+    view.cycle_image()
+
+    assert isinstance(view.char_image_area.content, ft.Image)
+    assert view.char_image_area.content.src == 'COKO\\02.png'
+    assert saved_states[-1] == ('COKO', '02.png')
+
+    view.reload_image()
+
+    assert isinstance(view.char_image_area.content, ft.Image)
+    assert view.char_image_area.content.src == 'COKO\\01.png'
+    assert saved_states[-1] == ('COKO', '01.png')
