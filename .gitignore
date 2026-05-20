@@ -255,19 +255,21 @@ __marimo__/
 ###############################################################################
 # START Companion
 ###############################################################################
-# 画像
+# 画像データ
 src/resource/image/character/*
 !src/resource/image/character/.gitkeep
 
-# 音声
+# 音声データ
 src/resource/voice/clicked/*
 !src/resource/voice/clicked/.gitkeep
-
 src/resource/voice/time_signal/*
 !src/resource/voice/time_signal/.gitkeep
 
-src/resource/voice/voice_manifest.json
+# 設定保持
+src/.mycompanion_state.json
 
+# ユーザ依存ファイル
+src/resource/voice/voice_manifest.json
 src/tools/generate_voice/input_voices.yaml
 src/tools/list_voices/available_voices.json
 

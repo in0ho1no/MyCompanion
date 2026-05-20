@@ -1,6 +1,7 @@
 """Flet GUI の構築とイベント処理。"""
 
 import asyncio
+import json
 import random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -42,6 +43,45 @@ _C_ACCENT = '#b5722d'
 
 _WEEKDAY_JA = ['月', '火', '水', '木', '金', '土', '日']
 _MONO = 'Consolas'
+_STATE_FILE = Path(__file__).with_name('.mycompanion_state.json')
+
+
+def _load_selected_character(state_file: Path = _STATE_FILE) -> str | None:
+    """保存済みの選択キャラクター名を返す。"""
+    try:
+        raw = json.loads(state_file.read_text(encoding='utf-8'))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+
+    selected_character = raw.get('selected_character')
+    if isinstance(selected_character, str) and selected_character:
+        return selected_character
+    return None
+
+
+def _save_selected_character(character: str | None, state_file: Path = _STATE_FILE) -> None:
+    """選択中キャラクター名を状態ファイルへ保存する。"""
+    try:
+        state_file.write_text(
+            json.dumps({'selected_character': character}, ensure_ascii=False, indent=2),
+            encoding='utf-8',
+        )
+    except OSError:
+        return
+
+
+def _resolve_initial_character(characters: list[str], previous_character: str | None) -> tuple[str | None, str | None]:
+    """起動時の選択キャラクターと必要な通知メッセージを返す。"""
+    if not characters:
+        return None, None
+    if previous_character is None:
+        return characters[0], None
+    if previous_character in characters:
+        return previous_character, None
+
+    fallback_character = characters[0]
+    message = f'前回選択していた「{previous_character}」が存在しません。代わりに「{fallback_character}」を選択しました'
+    return fallback_character, message
 
 
 def main(page: ft.Page) -> None:
@@ -60,7 +100,9 @@ def main(page: ft.Page) -> None:
     date_text = ft.Text('---- -- -- (--)', size=12, weight=ft.FontWeight.W_500, color=_C_INK_SOFT)
 
     characters = _list_characters()
-    current_character: str | None = characters[0] if characters else None
+    previous_character = _load_selected_character()
+    current_character, startup_message = _resolve_initial_character(characters, previous_character)
+    _save_selected_character(current_character)
     image_found: list[bool] = [False]
     current_image_path: list[Path | None] = [None]
 
@@ -316,15 +358,13 @@ def main(page: ft.Page) -> None:
     def on_char_select(e: ft.ControlEvent, name: str) -> None:
         nonlocal current_character
         current_character = name
+        _save_selected_character(current_character)
         selected_char_label.value = name
         char_image_area.content = _make_char_content(name)
         page.update()
 
     if characters:
-        menu_items: list[ft.PopupMenuItem] = [
-            ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(e, n))
-            for name in characters
-        ]
+        menu_items: list[ft.PopupMenuItem] = [ft.PopupMenuItem(content=name, on_click=lambda e, n=name: on_char_select(e, n)) for name in characters]
     else:
         menu_items = [ft.PopupMenuItem(content='(キャラクターなし)', disabled=True)]
 
@@ -385,6 +425,9 @@ def main(page: ft.Page) -> None:
             expand=True,
         )
     )
+
+    if startup_message is not None:
+        _show_snack(startup_message)
 
     async def clock_loop() -> None:
         while True:
