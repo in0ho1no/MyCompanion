@@ -597,24 +597,47 @@ def _build_gui(page: Any) -> _GuiView:
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                pomodoro_phase_label,
-                pomodoro_timer_label,
-                pomodoro_status_label,
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Container(
+                                content=pomodoro_status_label,
+                                expand=True,
+                                alignment=ft.Alignment.CENTER,
+                            ),
+                            ft.Container(
+                                content=pomodoro_timer_label,
+                                alignment=ft.Alignment.CENTER,
+                            ),
+                            ft.Container(
+                                content=pomodoro_phase_label,
+                                expand=True,
+                                alignment=ft.Alignment.CENTER,
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=12,
+                    ),
+                    expand=True,
+                    alignment=ft.Alignment.CENTER,
+                ),
                 ft.Row(
                     [pomodoro_start_button, pomodoro_pause_button, pomodoro_skip_button],
-                    spacing=8,
+                    spacing=10,
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
             ],
-            alignment=ft.MainAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=10,
+            spacing=12,
+            expand=True,
         ),
         bgcolor=_C_BG_PANEL,
         border_radius=10,
         border=ft.Border.all(1, _C_LINE_STRONG),
         expand=True,
-        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.only(left=20, right=20, top=18, bottom=26),
     )
 
     tbd_card = ft.Container(
