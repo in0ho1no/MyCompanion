@@ -144,6 +144,18 @@ def _set_button_label(button: ft.OutlinedButton, label: str) -> None:
         button.content.value = label
 
 
+def _make_panel_badge(label: str) -> ft.Row:
+    """カード左上の小さな見出しを返す。"""
+    return ft.Row(
+        [
+            ft.Container(width=6, height=6, bgcolor=_C_ACCENT, border_radius=3),
+            ft.Text(label, size=10, color=_C_INK_MUTE, font_family=_MONO),
+        ],
+        spacing=6,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+
 def _load_ui_state(state_file: Path = _STATE_FILE) -> dict[str, str | None]:
     """保存済み UI 状態を返す。"""
     try:
@@ -549,14 +561,7 @@ def _build_gui(page: Any) -> _GuiView:
             [
                 ft.Row(
                     [
-                        ft.Row(
-                            [
-                                ft.Container(width=6, height=6, bgcolor=_C_ACCENT, border_radius=3),
-                                ft.Text('Asia / Tokyo', size=10, color=_C_INK_MUTE, font_family=_MONO),
-                            ],
-                            spacing=6,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
+                        _make_panel_badge('Asia / Tokyo'),
                         ft.Text('24-hour', size=10, color=_C_INK_MUTE, font_family=_MONO),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -574,14 +579,15 @@ def _build_gui(page: Any) -> _GuiView:
         bgcolor=_C_BG_PANEL,
         border_radius=10,
         border=ft.Border.all(1, _C_LINE),
+        expand=True,
     )
 
-    future_area = ft.Container(
+    pomodoro_card = ft.Container(
         content=ft.Column(
             [
                 ft.Row(
                     [
-                        ft.Text('pomodoro', size=10, color=_C_INK_MUTE, font_family=_MONO),
+                        _make_panel_badge('pomodoro'),
                         ft.Text(
                             f'{pomodoro_config.focus_seconds // 60:02d}/{pomodoro_config.break_seconds // 60:02d} min · {pomodoro_config.sets} sets',
                             size=10,
@@ -611,9 +617,55 @@ def _build_gui(page: Any) -> _GuiView:
         alignment=ft.Alignment.CENTER,
     )
 
+    tbd_card = ft.Container(
+        content=ft.Column(
+            [
+                ft.Row(
+                    [
+                        _make_panel_badge('T.B.D.'),
+                        ft.Text('reserved', size=10, color=_C_INK_MUTE, font_family=_MONO),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Text('次の枠', size=18, weight=ft.FontWeight.W_500, color=_C_INK_SOFT),
+                ft.Text(
+                    '格言、短いメモ、Todo などを置く候補エリア',
+                    size=12,
+                    color=_C_INK_MUTE,
+                    font_family=_MONO,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Row(
+                    [
+                        ft.Container(
+                            content=ft.Text(label, size=10, color=_C_INK_SOFT, font_family=_MONO),
+                            padding=ft.Padding.symmetric(horizontal=8, vertical=3),
+                            border=ft.Border.all(1, _C_LINE),
+                            border_radius=999,
+                            bgcolor=_C_BG_WINDOW,
+                        )
+                        for label in ['Quote', 'Memo', 'Todo']
+                    ],
+                    spacing=6,
+                    wrap=True,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=10,
+        ),
+        bgcolor=_C_BG_PANEL,
+        border_radius=10,
+        border=ft.Border.all(1, _C_LINE),
+        expand=True,
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.only(left=20, right=20, top=18, bottom=20),
+    )
+
     right_col = ft.Container(
         content=ft.Column(
-            [clock_card, future_area],
+            [clock_card, pomodoro_card, tbd_card],
             spacing=_GAP,
             expand=True,
         ),
