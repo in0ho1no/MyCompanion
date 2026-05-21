@@ -12,6 +12,12 @@ import pytest
 import gui
 
 
+def _button_label(button: ft.OutlinedButton) -> str:
+    """テスト用にボタンラベル文字列を返す。"""
+    assert isinstance(button.content, ft.Text)
+    return button.content.value
+
+
 @dataclass
 class _FakePage:
     """GUI 組み立てテスト向けの簡易 Page。"""
@@ -257,3 +263,99 @@ def test_wheel_click_handler_reloads_first_image_and_shows_snack(monkeypatch: py
     assert snack.open is True
     assert isinstance(snack.content, ft.Text)
     assert snack.content.value == '再読み込みしました'
+
+
+def test_build_gui_initializes_pomodoro_panel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GUI 構築時にポモドーロ表示を初期化する。"""
+    page = _FakePage()
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_load_pomodoro_config',
+        lambda config_path=gui._CONFIG_PATH: gui._PomodoroConfig(
+            focus_seconds=120,
+            break_seconds=60,
+            sets=3,
+        ),
+    )
+
+    view = gui._build_gui(page)
+
+    assert view.pomodoro_phase_label.value == '未開始'
+    assert view.pomodoro_timer_label.value == '02:00'
+    assert view.pomodoro_status_label.value == '開始待ち'
+    assert _button_label(view.pomodoro_start_button) == '開始'
+    assert view.pomodoro_pause_button.disabled is True
+    assert view.pomodoro_skip_button.disabled is True
+
+
+def test_pomodoro_start_pause_skip_and_tick(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ポモドーロの開始・一時停止・スキップ・完了遷移を反映する。"""
+    page = _FakePage()
+    played_paths: list[str] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_load_pomodoro_config',
+        lambda config_path=gui._CONFIG_PATH: gui._PomodoroConfig(
+            focus_seconds=2,
+            break_seconds=1,
+            sets=2,
+            auto_start_break=True,
+            auto_start_focus=True,
+        ),
+    )
+    monkeypatch.setattr(
+        gui,
+        '_get_pomodoro_files_for_character',
+        lambda character, name: [Path(f'{character}/{name}_001.wav')],
+    )
+    monkeypatch.setattr(gui, '_play_wav', lambda path: played_paths.append(str(path)))
+
+    view = gui._build_gui(page)
+
+    view.start_pomodoro()
+    assert view.pomodoro_phase_label.value == '集中 1 / 2'
+    assert view.pomodoro_status_label.value == '実行中'
+    assert _button_label(view.pomodoro_start_button) == '中止'
+    assert played_paths[-1].endswith('pomodoro_focus_start_001.wav')
+
+    view.toggle_pomodoro_pause()
+    assert view.pomodoro_status_label.value == '一時停止中'
+    assert _button_label(view.pomodoro_pause_button) == '再開'
+
+    view.toggle_pomodoro_pause()
+    view.tick_pomodoro()
+    assert view.pomodoro_timer_label.value == '00:01'
+
+    view.tick_pomodoro()
+    assert view.pomodoro_phase_label.value == '休憩 1 / 2'
+    assert played_paths[-1].endswith('pomodoro_break_start_001.wav')
+
+    view.skip_pomodoro()
+    assert view.pomodoro_phase_label.value == '集中 2 / 2'
+    assert played_paths[-1].endswith('pomodoro_focus_start_001.wav')
+
+    view.tick_pomodoro()
+    view.tick_pomodoro()
+    assert view.pomodoro_phase_label.value == '完了 2 / 2'
+    assert view.pomodoro_status_label.value == '完了'
+    assert played_paths[-1].endswith('pomodoro_finish_001.wav')

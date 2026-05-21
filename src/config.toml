@@ -4,3 +4,10 @@ narrator = "Miyamai Moca"
 
 [check_sound_duplicate]
 target_folder = "resource/voice/time_signal"
+
+[pomodoro]
+focus_minutes = 25
+break_minutes = 5
+sets = 4
+auto_start_break = true
+auto_start_focus = true

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import random
+import tomllib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ from media import (
     _character_dir_exists,
     _clicked_dir_exists,
     _get_clicked_files_for_character,
+    _get_pomodoro_files_for_character,
     _get_time_signal_files,
     _list_character_images,
     _list_characters,
@@ -46,6 +48,18 @@ _C_ACCENT = '#b5722d'
 _WEEKDAY_JA = ['月', '火', '水', '木', '金', '土', '日']
 _MONO = 'Consolas'
 _STATE_FILE = Path(__file__).with_name('.mycompanion_state.json')
+_CONFIG_PATH = Path(__file__).with_name('config.toml')
+
+
+@dataclass(frozen=True)
+class _PomodoroConfig:
+    """ポモドーロタイマー設定。"""
+
+    focus_seconds: int = 25 * 60
+    break_seconds: int = 5 * 60
+    sets: int = 4
+    auto_start_break: bool = True
+    auto_start_focus: bool = True
 
 
 @dataclass
@@ -62,6 +76,72 @@ class _GuiView:
     select_character: Callable[[str], None]
     reload_image: Callable[[], None]
     cycle_image: Callable[[], None]
+    pomodoro_phase_label: ft.Text
+    pomodoro_timer_label: ft.Text
+    pomodoro_status_label: ft.Text
+    pomodoro_start_button: ft.OutlinedButton
+    pomodoro_pause_button: ft.OutlinedButton
+    pomodoro_skip_button: ft.OutlinedButton
+    start_pomodoro: Callable[[], None]
+    toggle_pomodoro_pause: Callable[[], None]
+    skip_pomodoro: Callable[[], None]
+    tick_pomodoro: Callable[[], None]
+
+
+def _load_pomodoro_config(config_path: Path = _CONFIG_PATH) -> _PomodoroConfig:
+    """config.toml からポモドーロ設定を読み込む。"""
+
+    def _coerce_positive_int(value: object, default: int) -> int:
+        if isinstance(value, bool):
+            return default
+        if isinstance(value, int) and value > 0:
+            return value
+        return default
+
+    def _coerce_bool(value: object, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        return default
+
+    try:
+        with config_path.open('rb') as config_file:
+            config = tomllib.load(config_file)
+    except (FileNotFoundError, OSError, tomllib.TOMLDecodeError):
+        return _PomodoroConfig()
+
+    section = config.get('pomodoro')
+    if not isinstance(section, dict):
+        return _PomodoroConfig()
+
+    focus_minutes = _coerce_positive_int(section.get('focus_minutes'), 25)
+    break_minutes = _coerce_positive_int(section.get('break_minutes'), 5)
+    sets = _coerce_positive_int(section.get('sets'), 4)
+    auto_start_break = _coerce_bool(section.get('auto_start_break'), True)
+    auto_start_focus = _coerce_bool(section.get('auto_start_focus'), True)
+    return _PomodoroConfig(
+        focus_seconds=focus_minutes * 60,
+        break_seconds=break_minutes * 60,
+        sets=sets,
+        auto_start_break=auto_start_break,
+        auto_start_focus=auto_start_focus,
+    )
+
+
+def _format_mmss(total_seconds: int) -> str:
+    """秒数を MM:SS 形式へ変換する。"""
+    minutes, seconds = divmod(max(total_seconds, 0), 60)
+    return f'{minutes:02d}:{seconds:02d}'
+
+
+def _make_button(label: str, *, disabled: bool = False) -> ft.OutlinedButton:
+    """ラベル付きボタンを返す。"""
+    return ft.OutlinedButton(content=ft.Text(label, font_family=_MONO, size=11), disabled=disabled)
+
+
+def _set_button_label(button: ft.OutlinedButton, label: str) -> None:
+    """ボタンラベルを更新する。"""
+    if isinstance(button.content, ft.Text):
+        button.content.value = label
 
 
 def _load_ui_state(state_file: Path = _STATE_FILE) -> dict[str, str | None]:
@@ -166,6 +246,7 @@ def _build_gui(page: Any) -> _GuiView:
     hhmm_text = ft.Text('00:00', size=56, weight=ft.FontWeight.W_500, color=_C_INK, font_family=_MONO)
     ss_text = ft.Text(':00', size=28, color=_C_INK_MUTE, font_family=_MONO)
     date_text = ft.Text('---- -- -- (--)', size=12, weight=ft.FontWeight.W_500, color=_C_INK_SOFT)
+    pomodoro_config = _load_pomodoro_config()
 
     characters = _list_characters()
     ui_state = _load_ui_state()
@@ -271,11 +352,135 @@ def _build_gui(page: Any) -> _GuiView:
     _save_ui_state(current_character, selected_image_name[0])
 
     played_hhmm: set[str] = set()
+    pomodoro_phase: list[str] = ['idle']
+    pomodoro_set: list[int] = [0]
+    pomodoro_remaining: list[int] = [pomodoro_config.focus_seconds]
+    pomodoro_paused: list[bool] = [False]
+
+    pomodoro_phase_label = ft.Text('未開始', size=11, color=_C_INK_SOFT, font_family=_MONO)
+    pomodoro_timer_label = ft.Text(
+        _format_mmss(pomodoro_config.focus_seconds),
+        size=34,
+        weight=ft.FontWeight.W_500,
+        color=_C_INK,
+        font_family=_MONO,
+    )
+    pomodoro_status_label = ft.Text('開始待ち', size=12, color=_C_INK_MUTE, font_family=_MONO)
+    pomodoro_start_button = _make_button('開始')
+    pomodoro_pause_button = _make_button('一時停止', disabled=True)
+    pomodoro_skip_button = _make_button('スキップ', disabled=True)
 
     def _show_snack(msg: str) -> None:
         snack = ft.SnackBar(content=ft.Text(msg, color='white'), bgcolor=_C_INK, duration=1800)
         page.overlay.append(snack)
         snack.open = True
+
+    def _is_pomodoro_active() -> bool:
+        return pomodoro_phase[0] in {'focus', 'break'}
+
+    def _is_pomodoro_running() -> bool:
+        return _is_pomodoro_active() and not pomodoro_paused[0]
+
+    def _play_pomodoro_voice(name: str) -> None:
+        if current_character is None:
+            return
+        files = _get_pomodoro_files_for_character(current_character, name)
+        if files:
+            _play_wav(random.choice(files))
+
+    def _refresh_pomodoro_ui() -> None:
+        phase = pomodoro_phase[0]
+        if phase == 'focus':
+            pomodoro_phase_label.value = f'集中 {pomodoro_set[0]} / {pomodoro_config.sets}'
+            pomodoro_status_label.value = '一時停止中' if pomodoro_paused[0] else '実行中'
+        elif phase == 'break':
+            pomodoro_phase_label.value = f'休憩 {pomodoro_set[0]} / {pomodoro_config.sets}'
+            pomodoro_status_label.value = '一時停止中' if pomodoro_paused[0] else '実行中'
+        elif phase == 'completed':
+            pomodoro_phase_label.value = f'完了 {pomodoro_config.sets} / {pomodoro_config.sets}'
+            pomodoro_status_label.value = '完了'
+        elif phase == 'interrupted':
+            pomodoro_phase_label.value = '中止'
+            pomodoro_status_label.value = '中止後'
+        else:
+            pomodoro_phase_label.value = '未開始'
+            pomodoro_status_label.value = '開始待ち'
+
+        pomodoro_timer_label.value = _format_mmss(pomodoro_remaining[0])
+        _set_button_label(pomodoro_start_button, '中止' if _is_pomodoro_active() else '開始')
+        _set_button_label(pomodoro_pause_button, '再開' if _is_pomodoro_active() and pomodoro_paused[0] else '一時停止')
+        pomodoro_pause_button.disabled = not _is_pomodoro_active()
+        pomodoro_skip_button.disabled = not _is_pomodoro_active()
+
+    def _set_focus_phase(set_number: int, auto_start: bool, play_voice: bool = True) -> None:
+        pomodoro_phase[0] = 'focus'
+        pomodoro_set[0] = set_number
+        pomodoro_remaining[0] = pomodoro_config.focus_seconds
+        pomodoro_paused[0] = not auto_start
+        if play_voice:
+            _play_pomodoro_voice('pomodoro_focus_start')
+        _refresh_pomodoro_ui()
+
+    def _set_break_phase(set_number: int, auto_start: bool, play_voice: bool = True) -> None:
+        pomodoro_phase[0] = 'break'
+        pomodoro_set[0] = set_number
+        pomodoro_remaining[0] = pomodoro_config.break_seconds
+        pomodoro_paused[0] = not auto_start
+        if play_voice:
+            _play_pomodoro_voice('pomodoro_break_start')
+        _refresh_pomodoro_ui()
+
+    def _finish_pomodoro(interrupted: bool) -> None:
+        pomodoro_phase[0] = 'interrupted' if interrupted else 'completed'
+        pomodoro_remaining[0] = 0
+        pomodoro_paused[0] = False
+        _play_pomodoro_voice('pomodoro_interrupt' if interrupted else 'pomodoro_finish')
+        _refresh_pomodoro_ui()
+
+    def _advance_pomodoro_phase() -> None:
+        if pomodoro_phase[0] == 'focus':
+            if pomodoro_set[0] >= pomodoro_config.sets:
+                _finish_pomodoro(interrupted=False)
+                return
+            _set_break_phase(pomodoro_set[0], pomodoro_config.auto_start_break)
+            return
+        if pomodoro_phase[0] == 'break':
+            _set_focus_phase(pomodoro_set[0] + 1, pomodoro_config.auto_start_focus)
+
+    def start_pomodoro() -> None:
+        if _is_pomodoro_active():
+            _finish_pomodoro(interrupted=True)
+            page.update()
+            return
+        _set_focus_phase(1, True)
+        page.update()
+
+    def toggle_pomodoro_pause() -> None:
+        if not _is_pomodoro_active():
+            return
+        pomodoro_paused[0] = not pomodoro_paused[0]
+        _refresh_pomodoro_ui()
+        page.update()
+
+    def skip_pomodoro() -> None:
+        if not _is_pomodoro_active():
+            return
+        _advance_pomodoro_phase()
+        page.update()
+
+    def tick_pomodoro() -> None:
+        if not _is_pomodoro_running():
+            return
+        pomodoro_remaining[0] -= 1
+        if pomodoro_remaining[0] <= 0:
+            _advance_pomodoro_phase()
+            return
+        _refresh_pomodoro_ui()
+
+    pomodoro_start_button.on_click = lambda _e: start_pomodoro()
+    pomodoro_pause_button.on_click = lambda _e: toggle_pomodoro_pause()
+    pomodoro_skip_button.on_click = lambda _e: skip_pomodoro()
+    _refresh_pomodoro_ui()
 
     def on_character_click(_: ft.TapEvent) -> None:
         if current_character is None:
@@ -374,27 +579,30 @@ def _build_gui(page: Any) -> _GuiView:
     future_area = ft.Container(
         content=ft.Column(
             [
-                ft.Text('reserved · 拡張領域', size=10, color=_C_INK_MUTE, font_family=_MONO),
-                ft.Text('ここに今後追加', size=13, weight=ft.FontWeight.W_500, color=_C_INK_SOFT),
                 ft.Row(
                     [
-                        ft.Container(
-                            content=ft.Text(label, size=10, color=_C_INK_SOFT, font_family=_MONO),
-                            padding=ft.Padding.symmetric(horizontal=8, vertical=3),
-                            border=ft.Border.all(1, _C_LINE),
-                            border_radius=999,
-                            bgcolor=_C_BG_WINDOW,
-                        )
-                        for label in ['ToDo', 'Timer', '...']
+                        ft.Text('pomodoro', size=10, color=_C_INK_MUTE, font_family=_MONO),
+                        ft.Text(
+                            f'{pomodoro_config.focus_seconds // 60:02d}/{pomodoro_config.break_seconds // 60:02d} min · {pomodoro_config.sets} sets',
+                            size=10,
+                            color=_C_INK_MUTE,
+                            font_family=_MONO,
+                        ),
                     ],
-                    spacing=6,
-                    wrap=True,
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                pomodoro_phase_label,
+                pomodoro_timer_label,
+                pomodoro_status_label,
+                ft.Row(
+                    [pomodoro_start_button, pomodoro_pause_button, pomodoro_skip_button],
+                    spacing=8,
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8,
+            spacing=10,
         ),
         bgcolor=_C_BG_PANEL,
         border_radius=10,
@@ -485,8 +693,9 @@ def _build_gui(page: Any) -> _GuiView:
             hhmm_text.value = now.strftime('%H:%M')
             ss_text.value = f':{now.strftime("%S")}'
             date_text.value = f'{now.strftime("%Y.%m.%d")} ({_WEEKDAY_JA[now.weekday()]})'
+            tick_pomodoro()
             page.update()
-            if hhmm_str not in played_hhmm:
+            if hhmm_str not in played_hhmm and not _is_pomodoro_running():
                 files = _get_time_signal_files(hhmm_str)
                 if files:
                     played_hhmm.add(hhmm_str)
@@ -505,6 +714,16 @@ def _build_gui(page: Any) -> _GuiView:
         select_character=on_char_select,
         reload_image=reload_image,
         cycle_image=cycle_image,
+        pomodoro_phase_label=pomodoro_phase_label,
+        pomodoro_timer_label=pomodoro_timer_label,
+        pomodoro_status_label=pomodoro_status_label,
+        pomodoro_start_button=pomodoro_start_button,
+        pomodoro_pause_button=pomodoro_pause_button,
+        pomodoro_skip_button=pomodoro_skip_button,
+        start_pomodoro=start_pomodoro,
+        toggle_pomodoro_pause=toggle_pomodoro_pause,
+        skip_pomodoro=skip_pomodoro,
+        tick_pomodoro=tick_pomodoro,
     )
 
 

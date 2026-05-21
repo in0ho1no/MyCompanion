@@ -133,6 +133,15 @@ def test_validate_input_rejects_clicked_entry_without_name(capsys: pytest.Captur
     assert '"name" キーがありません' in captured.out
 
 
+def test_validate_input_rejects_pomodoro_entry_without_name(capsys: pytest.CaptureFixture[str]) -> None:
+    """Pomodoro の name 欠落も検出する。"""
+    is_valid = gen_voice._validate_input({'voices': [{'narrator': 'Narrator', 'pomodoro': [{'text': 'hello'}]}]}, None)
+
+    captured = capsys.readouterr()
+    assert is_valid is False
+    assert 'pomodoroエントリに "name" キーがありません' in captured.out
+
+
 def test_validate_input_accepts_valid_entries() -> None:
     """必要キーが揃っていれば入力を受け入れる。"""
     input_data = {
@@ -148,6 +157,7 @@ def test_validate_input_accepts_valid_entries() -> None:
                     }
                 ],
                 'clicked': [{'name': 'tap', 'text': 'hello'}],
+                'pomodoro': [{'name': 'pomodoro_focus_start', 'text': 'focus'}],
             }
         ]
     }
@@ -209,6 +219,34 @@ def test_get_output_dir_creates_narrator_specific_directory(tmp_path: Path, monk
     assert output_dir == tmp_path / 'clicked' / 'Narrator'
     assert output_dir.exists()
     assert gen_voice._get_output_dir('clicked', 'Narrator', cache) == output_dir
+
+
+def test_process_named_entries_generates_pomodoro_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pomodoro も clicked と同様のロジックで生成する。"""
+    monkeypatch.setattr(gen_voice, '_RESOURCE_VOICE_DIR', tmp_path)
+    monkeypatch.setattr(gen_voice, '_generate_voice', lambda voicepeak, narrator, text, output, emotions: True)
+    monkeypatch.setattr(
+        gen_voice,
+        '_record_to_manifest',
+        lambda manifest, filename, entry_type, type_specific, text, narrator, emotions, output_path, dup_folder: manifest.append(
+            {'filename': filename, 'type': entry_type, **type_specific}
+        ),
+    )
+
+    manifest: list[dict[str, object]] = []
+    success, failure = gen_voice._process_named_entries(
+        [{'name': 'pomodoro_focus_start', 'text': 'focus'}],
+        category='pomodoro',
+        voice_narrator='Narrator',
+        default_emotions=None,
+        voicepeak='voicepeak.exe',
+        dir_cache={},
+        manifest=manifest,
+    )
+
+    assert success == 1
+    assert failure == 0
+    assert manifest == [{'filename': 'pomodoro_focus_start_001.wav', 'type': 'pomodoro', 'name': 'pomodoro_focus_start'}]
 
 
 def test_display_output_path_uses_voice_relative_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
