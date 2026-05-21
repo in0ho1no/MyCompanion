@@ -361,6 +361,38 @@ def test_get_clicked_files_for_character_does_not_include_other_characters(tmp_p
     assert result == [tmp_path / 'Moca' / 'greeting_001.wav']
 
 
+# ---------------------------------------------------------------------------
+# _pomodoro_dir_exists / _get_pomodoro_files_for_character
+# ---------------------------------------------------------------------------
+
+
+def test_pomodoro_dir_exists_returns_true_for_existing_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ポモドーロ音声ディレクトリが存在するとき True を返す。"""
+    (tmp_path / 'Moca').mkdir()
+    monkeypatch.setattr(media, '_POMODORO_DIR', tmp_path)
+
+    assert media._pomodoro_dir_exists('Moca') is True
+
+
+def test_pomodoro_dir_exists_returns_false_for_missing_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ポモドーロ音声ディレクトリが存在しないとき False を返す。"""
+    monkeypatch.setattr(media, '_POMODORO_DIR', tmp_path)
+
+    assert media._pomodoro_dir_exists('Ghost') is False
+
+
+def test_get_pomodoro_files_for_character_returns_matching_wavs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """指定名に一致するポモドーロ音声のみ返す。"""
+    char_dir = tmp_path / 'Moca'
+    char_dir.mkdir()
+    wanted = char_dir / 'pomodoro_focus_start_001.wav'
+    wanted.write_bytes(b'wav')
+    (char_dir / 'pomodoro_break_start_001.wav').write_bytes(b'wav')
+    monkeypatch.setattr(media, '_POMODORO_DIR', tmp_path)
+
+    assert media._get_pomodoro_files_for_character('Moca', 'pomodoro_focus_start') == [wanted]
+
+
 def test_list_character_images_sorts_across_extensions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """異なる拡張子のファイルもファイル名昇順で混在させて返す。"""
     char_dir = tmp_path / 'Moca'

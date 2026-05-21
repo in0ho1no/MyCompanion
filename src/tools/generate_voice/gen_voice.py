@@ -147,6 +147,66 @@ def _get_output_dir(category: str, narrator: str, dir_cache: dict[str, Path]) ->
     return output_dir
 
 
+def _validate_named_entries(entries_obj: object, label: str, voice_narrator: str | None) -> bool:
+    if not isinstance(entries_obj, list):
+        print(f'エラー: {label} は配列である必要があります。')
+        return False
+
+    for entry in entries_obj:
+        if not isinstance(entry, dict):
+            print(f'エラー: {label} エントリが不正です: {entry}')
+            return False
+        if 'name' not in entry:
+            print(f'エラー: {label}エントリに "name" キーがありません: {entry}')
+            return False
+        if 'text' not in entry:
+            print(f'エラー: {label}エントリに "text" キーがありません: {entry}')
+            return False
+        if _resolve_narrator(entry, voice_narrator) is None:
+            print(f'エラー: {label}エントリに narrator がありません: {entry}')
+            return False
+
+    return True
+
+
+def _process_named_entries(
+    entries_obj: object,
+    *,
+    category: str,
+    voice_narrator: str | None,
+    default_emotions: str | None,
+    voicepeak: str,
+    dir_cache: dict[str, Path],
+    manifest: list[dict[str, object]],
+) -> tuple[int, int]:
+    success = 0
+    failure = 0
+    if not isinstance(entries_obj, list):
+        return success, failure
+
+    for entry in entries_obj:
+        if not isinstance(entry, dict):
+            continue
+        narrator = _resolve_narrator(entry, voice_narrator)
+        if narrator is None:
+            continue
+        name = _get_required_str(entry, 'name')
+        text = _get_required_str(entry, 'text')
+        emotions = _resolve_emotions(entry, default_emotions)
+        output_dir = _get_output_dir(category, narrator, dir_cache)
+        num = _get_next_number(output_dir, name)
+        filename = f'{name}_{num:03d}.wav'
+        output_path = output_dir / filename
+        print(f'生成中: narrator={narrator}, file={_display_output_path(output_path)}')
+        if _generate_voice(voicepeak, narrator, text, output_path, emotions):
+            _record_to_manifest(manifest, filename, category, {'name': name}, text, narrator, emotions, output_path, output_dir)
+            success += 1
+        else:
+            failure += 1
+
+    return success, failure
+
+
 def _validate_input(input_data: Mapping[str, object], default_narrator: str | None) -> bool:
     voices = input_data.get('voices')
     if not isinstance(voices, list):
@@ -159,24 +219,10 @@ def _validate_input(input_data: Mapping[str, object], default_narrator: str | No
             return False
         voice_narrator = _resolve_narrator(voice, default_narrator)
 
-        clicked_entries = voice.get('clicked', [])
-        if not isinstance(clicked_entries, list):
-            print(f'エラー: clicked は配列である必要があります: {voice}')
+        if not _validate_named_entries(voice.get('clicked', []), 'clicked', voice_narrator):
             return False
-
-        for entry in clicked_entries:
-            if not isinstance(entry, dict):
-                print(f'エラー: clicked エントリが不正です: {entry}')
-                return False
-            if 'name' not in entry:
-                print(f'エラー: clickedエントリに "name" キーがありません: {entry}')
-                return False
-            if 'text' not in entry:
-                print(f'エラー: clickedエントリに "text" キーがありません: {entry}')
-                return False
-            if _resolve_narrator(entry, voice_narrator) is None:
-                print(f'エラー: clickedエントリに narrator がありません: {entry}')
-                return False
+        if not _validate_named_entries(voice.get('pomodoro', []), 'pomodoro', voice_narrator):
+            return False
 
         time_signal_entries = voice.get('time_signal', [])
         if not isinstance(time_signal_entries, list):
@@ -239,6 +285,7 @@ def main() -> None:
 
     time_signal_dirs: dict[str, Path] = {}
     clicked_dirs: dict[str, Path] = {}
+    pomodoro_dirs: dict[str, Path] = {}
 
     manifest = _load_manifest()
     total_success = 0
@@ -281,28 +328,29 @@ def main() -> None:
                     else:
                         total_failure += 1
 
-        clicked_entries = voice.get('clicked', [])
-        if not isinstance(clicked_entries, list):
-            continue
-        for entry in clicked_entries:
-            if not isinstance(entry, dict):
-                continue
-            narrator = _resolve_narrator(entry, voice_narrator)
-            if narrator is None:
-                continue
-            name = _get_required_str(entry, 'name')
-            text = _get_required_str(entry, 'text')
-            emotions = _resolve_emotions(entry, default_emotions)
-            clicked_dir = _get_output_dir('clicked', narrator, clicked_dirs)
-            num = _get_next_number(clicked_dir, name)
-            filename = f'{name}_{num:03d}.wav'
-            output_path = clicked_dir / filename
-            print(f'生成中: narrator={narrator}, file={_display_output_path(output_path)}')
-            if _generate_voice(voicepeak, narrator, text, output_path, emotions):
-                _record_to_manifest(manifest, filename, 'clicked', {'name': name}, text, narrator, emotions, output_path, clicked_dir)
-                total_success += 1
-            else:
-                total_failure += 1
+        clicked_success, clicked_failure = _process_named_entries(
+            voice.get('clicked', []),
+            category='clicked',
+            voice_narrator=voice_narrator,
+            default_emotions=default_emotions,
+            voicepeak=voicepeak,
+            dir_cache=clicked_dirs,
+            manifest=manifest,
+        )
+        total_success += clicked_success
+        total_failure += clicked_failure
+
+        pomodoro_success, pomodoro_failure = _process_named_entries(
+            voice.get('pomodoro', []),
+            category='pomodoro',
+            voice_narrator=voice_narrator,
+            default_emotions=default_emotions,
+            voicepeak=voicepeak,
+            dir_cache=pomodoro_dirs,
+            manifest=manifest,
+        )
+        total_success += pomodoro_success
+        total_failure += pomodoro_failure
 
     _save_manifest(manifest)
     print(f'\n完了: {total_success} 件成功 / {total_failure} 件失敗')
