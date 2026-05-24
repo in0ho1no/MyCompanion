@@ -7,6 +7,7 @@ _ROOT = Path(__file__).parent
 _TIME_SIGNAL_DIR = _ROOT / 'resource' / 'voice' / 'time_signal'
 _CLICKED_DIR = _ROOT / 'resource' / 'voice' / 'clicked'
 _POMODORO_DIR = _ROOT / 'resource' / 'voice' / 'pomodoro'
+_TODO_DIR = _ROOT / 'resource' / 'voice' / 'todo'
 _IMAGE_DIR = _ROOT / 'resource' / 'image' / 'character'
 
 _IMAGE_EXTS: tuple[str, ...] = ('.gif', '.png', '.jpg', '.jpeg', '.webp')
@@ -63,6 +64,14 @@ def _pomodoro_dir_exists(character: str) -> bool:
 def _get_pomodoro_files_for_character(character: str, name: str) -> list[Path]:
     """指定キャラクターのポモドーロ音声一覧を返す。"""
     char_dir = _POMODORO_DIR / character
+    if not char_dir.exists():
+        return []
+    return sorted(char_dir.rglob(f'{name}_*.wav'))
+
+
+def _get_todo_files_for_character(character: str, name: str) -> list[Path]:
+    """指定キャラクターの Todo 音声一覧を返す。"""
+    char_dir = _TODO_DIR / character
     if not char_dir.exists():
         return []
     return sorted(char_dir.rglob(f'{name}_*.wav'))

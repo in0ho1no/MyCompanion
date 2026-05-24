@@ -243,6 +243,8 @@ def _validate_input(input_data: Mapping[str, object], default_narrator: str | No
             return False
         if not _validate_named_entries(voice.get('pomodoro', []), 'pomodoro', voice_narrator):
             return False
+        if not _validate_named_entries(voice.get('todo', []), 'todo', voice_narrator):
+            return False
 
         time_signal_entries = voice.get('time_signal', [])
         if not isinstance(time_signal_entries, list):
@@ -306,6 +308,7 @@ def main() -> None:
     time_signal_dirs: dict[str, Path] = {}
     clicked_dirs: dict[str, Path] = {}
     pomodoro_dirs: dict[str, Path] = {}
+    todo_dirs: dict[str, Path] = {}
 
     manifest = _load_manifest()
     total_success = 0
@@ -371,6 +374,18 @@ def main() -> None:
         )
         total_success += pomodoro_success
         total_failure += pomodoro_failure
+
+        todo_success, todo_failure = _process_named_entries(
+            voice.get('todo', []),
+            category='todo',
+            voice_narrator=voice_narrator,
+            default_emotions=default_emotions,
+            voicepeak=voicepeak,
+            dir_cache=todo_dirs,
+            manifest=manifest,
+        )
+        total_success += todo_success
+        total_failure += todo_failure
 
     _save_manifest(manifest)
     print(f'\n完了: {total_success} 件成功 / {total_failure} 件失敗')

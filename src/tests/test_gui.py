@@ -933,3 +933,86 @@ def test_pomodoro_start_pause_skip_and_tick(monkeypatch: pytest.MonkeyPatch) -> 
     assert view.pomodoro_phase_label.value == '完了 2 / 2'
     assert view.pomodoro_status_label.value == '完了'
     assert played_paths[-1].endswith('pomodoro_finish_001.wav')
+
+
+def test_build_gui_new_todo_plays_add_voice_only_for_new_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    """新規 Todo 追加時だけ登録音声を鳴らす。"""
+    page = _FakePage()
+    played_paths: list[str] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(gui, '_save_today_todos', lambda todos, state_file=gui._STATE_FILE, today=None: None)
+    monkeypatch.setattr(
+        gui,
+        '_get_todo_files_for_character',
+        lambda character, name: [Path(f'{character}/{name}_001.wav')],
+    )
+    monkeypatch.setattr(gui, '_play_wav', lambda path: played_paths.append(str(path)))
+
+    view = gui._build_gui(page)
+
+    view.start_new_todo()
+    view.todo_input.value = '資料整理'
+    view.commit_todo()
+    assert played_paths[-1].endswith('todo_add_001.wav')
+
+    view.select_todo(0)
+    view.todo_input.value = '牛乳を買う 改'
+    view.commit_todo()
+    assert played_paths == ['COKO\\todo_add_001.wav']
+
+
+def test_build_gui_checking_todo_plays_done_voice_only_when_marking_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Todo 完了時だけ完了音声を鳴らし、解除時は鳴らさない。"""
+    page = _FakePage()
+    played_paths: list[str] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(gui, '_save_today_todos', lambda todos, state_file=gui._STATE_FILE, today=None: None)
+    monkeypatch.setattr(
+        gui,
+        '_get_todo_files_for_character',
+        lambda character, name: [Path(f'{character}/{name}_001.wav')],
+    )
+    monkeypatch.setattr(gui, '_play_wav', lambda path: played_paths.append(str(path)))
+
+    view = gui._build_gui(page)
+    row = cast(ft.Container, view.todo_list_column.controls[0])
+    row_content = cast(ft.Row, row.content)
+    checkbox = cast(ft.Checkbox, row_content.controls[0])
+    assert checkbox.on_change is not None
+    toggle_handler = cast(Callable[[object], None], checkbox.on_change)
+
+    checkbox.value = True
+    toggle_handler(SimpleNamespace(control=checkbox))
+    assert played_paths[-1].endswith('todo_done_001.wav')
+
+    checkbox.value = False
+    toggle_handler(SimpleNamespace(control=checkbox))
+    assert played_paths == ['COKO\\todo_done_001.wav']
