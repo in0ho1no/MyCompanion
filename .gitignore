@@ -264,6 +264,8 @@ src/resource/voice/clicked/*
 !src/resource/voice/clicked/.gitkeep
 src/resource/voice/pomodoro/*
 !src/resource/voice/pomodoro/.gitkeep
+src/resource/voice/todo/*
+!src/resource/voice/todo/.gitkeep
 src/resource/voice/time_signal/*
 !src/resource/voice/time_signal/.gitkeep
 
