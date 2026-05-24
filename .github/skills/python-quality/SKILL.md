@@ -2,7 +2,7 @@
 name: python-quality
 description: >-
   Pythonコードの静的解析を行い品質を確認する。
-  「コードをチェックして」「品質確認して」「ruffで見て」「mypyで型チェック」「Lintして」
+  「コードをチェックして」「品質確認して」「ruffで見て」「mypyで型チェック」「pyrightで見て」「Lintして」
   「このコード問題ある?」「静的解析して」のようにPythonコードの確認を依頼されたとき、
   またはPythonファイルを開いた状態で品質に関する質問があるときは、
   明示されなくても必ずこのスキルを使うこと。
@@ -10,7 +10,7 @@ description: >-
 
 # Python品質チェッカー
 
-ruffとmypyを使ってPythonコードを静的解析し、問題点を優先度付きで報告する。
+ruff・mypy・pyrightを使ってPythonコードを静的解析し、問題点を優先度付きで報告する。
 
 ## 対象パスを決める
 
@@ -68,6 +68,15 @@ ruffとmypyを使ってPythonコードを静的解析し、問題点を優先度
 - mypyが見つからない場合はユーザーの環境に応じたインストール方法を案内して終了する(例: `uv add mypy` / `pip install mypy`)
 - `mypy.ini` または `pyproject.toml` の `[tool.mypy]` セクションがあれば自動的に読み込まれる
 
+### pyrightで型チェック
+
+```
+<ランナー> pyright <対象パス>
+```
+
+- pyrightが見つからない場合はユーザーの環境に応じたインストール方法を案内して終了する(例: `uv add --dev "pyright[nodejs]"` / `pip install pyright`)
+- `pyproject.toml` の `[tool.pyright]` セクションがあれば自動的に読み込まれる
+
 ## レポート形式
 
 以下のフォーマットで出力する。問題が0件のセクションは省略してよい。
@@ -85,15 +94,19 @@ ruffとmypyを使ってPythonコードを静的解析し、問題点を優先度
 ### 🟡 mypy
 - `src/main.py:8` error: 引数の型が一致しません (expected "str", got "int")
 
+### 🟡 pyright
+- `src/main.py:8` Argument of type "Literal[1]" cannot be assigned to parameter of type "str"
+
 ### ✅ サマリー
 | ツール        | 件数 |
 |---------------|------|
 | ruff check    | 2件  |
 | ruff format   | 1件  |
 | mypy          | 1件  |
+| pyright       | 1件  |
 ```
 
-問題が一切ない場合は「✅ ruff check・ruff format・mypy ともに問題は検出されませんでした」とだけ出力する。
+問題が一切ない場合は「✅ ruff check・ruff format・mypy・pyright ともに問題は検出されませんでした」とだけ出力する。
 
 ## 注意事項
 
@@ -102,3 +115,4 @@ ruffとmypyを使ってPythonコードを静的解析し、問題点を優先度
 - 自動修正を提案する場合は「`<ランナー> ruff check --fix <対象パス>` で自動修正できます」と添えるにとどめ、勝手に実行しない
 - 自動フォーマットを提案する場合は「`<ランナー> ruff format <対象パス>` で自動フォーマットできます」と添えるにとどめ、勝手に実行しない
 - mypyのエラーが多い場合(20件超)は件数のみ示し、上位5件を抜粋する
+- pyrightのエラーが多い場合(20件超)は件数のみ示し、上位5件を抜粋する
