@@ -5,13 +5,17 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "flet>=0.85.1",
+    "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]
 dev = [
     "mypy>=1.20.1",
+    "pyright[nodejs]>=1.1.409",
     "pytest>=9.0.3",
     "ruff>=0.15.11",
+    "types-pyyaml>=6.0.12.20260518",
 ]
 
 [tool.ruff]
@@ -103,6 +107,34 @@ ignore_missing_imports = true
 exclude = [
     "docs/source/conf\\.py$", # . はエスケープ
 ]
+
+[tool.pyright]
+# 型チェックの対象ディレクトリ
+include = ["src"]
+# 既存の除外ルールと同期
+exclude = [
+    "**/.*",
+    "**/__pycache__",
+    "**/.git",
+    "**/.mypy_cache",
+    "**/.ruff_cache",
+    "**/.venv",
+    "**/venv",
+    "**/__pypackages__",
+    "**/_build",
+    "**/build",
+    "**/dist",
+    "**/node_modules",
+    "docs/source/conf.py",
+]
+pythonVersion = "3.12"
+pythonPlatform = "All"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportUnnecessaryTypeIgnoreComment = true
+reportUnnecessaryIsInstance = true
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

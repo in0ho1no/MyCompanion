@@ -60,6 +60,7 @@
 - Ruff（lint）: `uv run ruff check src/`
 - Ruff（format）: `uv run ruff format src/`
 - mypy: `uv run mypy src/`
+- pyright: `uv run pyright src/`
 - コード変更後は必ず上記を実行してエラーがないことを確認する
 
 ### テスト

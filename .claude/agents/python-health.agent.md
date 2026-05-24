@@ -32,7 +32,7 @@ description: >-
    - 指定がなければ、現在のワークスペース全体を対象にする
 
 2. ローカル品質を確認する
-   - `python-quality` スキルの手順に従って ruff check・ruff format --check・mypy を実行する
+   - `python-quality` スキルの手順に従って ruff check・ruff format --check・mypy・pyright を実行する
    - 実行できないツールがあれば、その不足も診断結果に含める
 
 3. GitHub 状態を必要最小限で確認する
@@ -66,6 +66,7 @@ description: >-
 - ruff check: X件
 - ruff format: X件
 - mypy: X件
+- pyright: X件
 
 ### GitHub状態
 
