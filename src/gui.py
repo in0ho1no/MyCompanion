@@ -459,7 +459,7 @@ def _build_gui(page: Any) -> _GuiView:
         content_padding=ft.Padding.symmetric(horizontal=8, vertical=6),
         dense=True,
     )
-    todo_list_column = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO)
+    todo_list_column = ft.Column(spacing=1, scroll=ft.ScrollMode.AUTO)
     selected_todo_index: list[int | None] = [None]
 
     def _show_snack(msg: str) -> None:
@@ -540,10 +540,10 @@ def _build_gui(page: Any) -> _GuiView:
                                 ft.Container(width=22),
                                 todo_input,
                             ],
-                            spacing=4,
+                            spacing=2,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
-                        padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                        padding=ft.Padding.symmetric(horizontal=2, vertical=0),
                         border_radius=8,
                         bgcolor=_C_BG_PANEL,
                     ),
@@ -555,7 +555,7 @@ def _build_gui(page: Any) -> _GuiView:
                             content=ft.Text('＋ 新しいTodo', size=12, color=_C_INK_MUTE, font_family=_MONO),
                             on_click=lambda _e: start_new_todo(),
                             style=ft.ButtonStyle(
-                                padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+                                padding=ft.Padding.symmetric(horizontal=6, vertical=4),
                                 alignment=ft.Alignment.CENTER_LEFT,
                             ),
                         ),
@@ -574,7 +574,7 @@ def _build_gui(page: Any) -> _GuiView:
                                 value=item.done,
                                 active_color=_C_ACCENT,
                                 on_change=lambda e, idx=index: _toggle_todo(idx, bool(e.control.value)),
-                                scale=0.8,
+                                scale=0.72,
                             ),
                             (
                                 todo_input
@@ -593,14 +593,14 @@ def _build_gui(page: Any) -> _GuiView:
                                     on_click=lambda _e, idx=index: select_todo(idx),
                                     expand=True,
                                     alignment=ft.Alignment.CENTER_LEFT,
-                                    padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+                                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
                                     border_radius=6,
                                     bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
                                 )
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.KEYBOARD_ARROW_UP,
-                                icon_size=14,
+                                icon_size=12,
                                 tooltip='上へ',
                                 disabled=index == 0,
                                 on_click=lambda _e, idx=index: move_todo_up(idx),
@@ -608,17 +608,17 @@ def _build_gui(page: Any) -> _GuiView:
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.KEYBOARD_ARROW_DOWN,
-                                icon_size=14,
+                                icon_size=12,
                                 tooltip='下へ',
                                 disabled=index == len(todo_items) - 1,
                                 on_click=lambda _e, idx=index: move_todo_down(idx),
                                 style=ft.ButtonStyle(padding=0),
                             ),
                         ],
-                        spacing=2,
+                        spacing=1,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=ft.Padding.symmetric(horizontal=2, vertical=0),
+                    padding=ft.Padding.symmetric(horizontal=1, vertical=0),
                     border_radius=8,
                     bgcolor=_C_BG_PANEL if _is_editing_existing(index) else None,
                 )
@@ -633,7 +633,7 @@ def _build_gui(page: Any) -> _GuiView:
                                 ft.Container(width=22),
                                 todo_input,
                             ],
-                            spacing=4,
+                            spacing=2,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         )
                         if _is_editing_new()
@@ -641,12 +641,12 @@ def _build_gui(page: Any) -> _GuiView:
                             content=ft.Text('＋ 新しいTodo', size=12, color=_C_INK_MUTE, font_family=_MONO),
                             on_click=lambda _e: start_new_todo(),
                             style=ft.ButtonStyle(
-                                padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+                                padding=ft.Padding.symmetric(horizontal=6, vertical=4),
                                 alignment=ft.Alignment.CENTER_LEFT,
                             ),
                         )
                     ),
-                    padding=ft.Padding.symmetric(horizontal=2, vertical=0),
+                    padding=ft.Padding.symmetric(horizontal=1, vertical=0),
                     border_radius=8,
                     alignment=ft.Alignment.CENTER_LEFT,
                     bgcolor=_C_BG_PANEL if _is_editing_new() else None,
@@ -928,8 +928,8 @@ def _build_gui(page: Any) -> _GuiView:
             [
                 ft.Container(
                     content=todo_list_column,
-                    height=112,
-                    padding=ft.Padding.symmetric(horizontal=4, vertical=4),
+                    height=124,
+                    padding=ft.Padding.symmetric(horizontal=3, vertical=2),
                     bgcolor=_C_BG_WINDOW,
                     border_radius=8,
                     border=ft.Border.all(1, _C_LINE),
