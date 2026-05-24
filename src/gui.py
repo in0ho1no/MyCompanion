@@ -83,9 +83,9 @@ class _GuiView:
     pomodoro_pause_button: ft.OutlinedButton
     pomodoro_skip_button: ft.OutlinedButton
     todo_input: ft.TextField
-    todo_add_button: ft.OutlinedButton
     todo_list_column: ft.Column
     select_todo: Callable[[int], None]
+    start_new_todo: Callable[[], None]
     commit_todo: Callable[[], None]
     move_todo_up: Callable[[int], None]
     move_todo_down: Callable[[int], None]
@@ -450,15 +450,15 @@ def _build_gui(page: Any) -> _GuiView:
     pomodoro_pause_button = _make_button('一時停止', disabled=True)
     pomodoro_skip_button = _make_button('スキップ', disabled=True)
     todo_input = ft.TextField(
-        hint_text='やることを入力 / 選択行を編集',
+        hint_text='Enter で確定',
         text_size=12,
         expand=True,
         border_color=_C_LINE_STRONG,
         focused_border_color=_C_ACCENT,
         cursor_color=_C_ACCENT,
-        content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+        content_padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+        dense=True,
     )
-    todo_add_button = _make_button('追加')
     todo_list_column = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO)
     selected_todo_index: list[int | None] = [None]
 
@@ -472,7 +472,6 @@ def _build_gui(page: Any) -> _GuiView:
 
     def _clear_todo_selection(clear_input: bool = True) -> None:
         selected_todo_index[0] = None
-        _set_button_label(todo_add_button, '追加')
         if clear_input:
             todo_input.value = ''
 
@@ -482,7 +481,15 @@ def _build_gui(page: Any) -> _GuiView:
             return
         selected_todo_index[0] = index
         todo_input.value = todo_items[index].text
-        _set_button_label(todo_add_button, '保存')
+
+    def start_new_todo() -> None:
+        if len(todo_items) >= 10:
+            _show_snack('Todo は最大10件までです')
+            return
+        selected_todo_index[0] = len(todo_items)
+        todo_input.value = ''
+        _render_todos()
+        page.update()
 
     def _toggle_todo(index: int, value: bool) -> None:
         if index >= len(todo_items):
@@ -517,68 +524,136 @@ def _build_gui(page: Any) -> _GuiView:
         _render_todos()
         page.update()
 
+    def _is_editing_existing(index: int) -> bool:
+        return selected_todo_index[0] == index and index < len(todo_items)
+
+    def _is_editing_new() -> bool:
+        return selected_todo_index[0] == len(todo_items) and len(todo_items) < 10
+
     def _render_todos() -> None:
         if not todo_items:
-            todo_list_column.controls = [
-                ft.Text('まだありません', size=12, color=_C_INK_MUTE, font_family=_MONO),
-            ]
-            _clear_todo_selection(clear_input=False)
+            if _is_editing_new():
+                todo_list_column.controls = [
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Container(width=22),
+                                todo_input,
+                            ],
+                            spacing=4,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                        border_radius=8,
+                        bgcolor=_C_BG_PANEL,
+                    ),
+                ]
+            else:
+                todo_list_column.controls = [
+                    ft.Container(
+                        content=ft.TextButton(
+                            content=ft.Text('＋ 新しいTodo', size=12, color=_C_INK_MUTE, font_family=_MONO),
+                            on_click=lambda _e: start_new_todo(),
+                            style=ft.ButtonStyle(
+                                padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+                                alignment=ft.Alignment.CENTER_LEFT,
+                            ),
+                        ),
+                        alignment=ft.Alignment.CENTER_LEFT,
+                    ),
+                ]
             return
 
-        todo_list_column.controls = [
-            ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Checkbox(
-                            value=item.done,
-                            active_color=_C_ACCENT,
-                            on_change=lambda e, idx=index: _toggle_todo(idx, bool(e.control.value)),
-                            scale=0.85,
-                        ),
-                        ft.Container(
-                            content=ft.Text(
-                                item.text,
-                                size=12,
-                                color=_C_INK if selected_todo_index[0] == index else _C_INK_SOFT,
-                                font_family=_MONO,
-                                text_align=ft.TextAlign.LEFT,
-                                style=ft.TextStyle(
-                                    decoration=ft.TextDecoration.LINE_THROUGH if item.done else ft.TextDecoration.NONE,
-                                ),
+        controls: list[ft.Control] = []
+        for index, item in enumerate(todo_items):
+            controls.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Checkbox(
+                                value=item.done,
+                                active_color=_C_ACCENT,
+                                on_change=lambda e, idx=index: _toggle_todo(idx, bool(e.control.value)),
+                                scale=0.8,
                             ),
-                            on_click=lambda _e, idx=index: select_todo(idx),
-                            expand=True,
-                            alignment=ft.Alignment.CENTER_LEFT,
-                            padding=ft.Padding.symmetric(horizontal=8, vertical=6),
-                            border_radius=6,
-                            bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.KEYBOARD_ARROW_UP,
-                            icon_size=14,
-                            tooltip='上へ',
-                            disabled=index == 0,
-                            on_click=lambda _e, idx=index: move_todo_up(idx),
-                            style=ft.ButtonStyle(padding=2),
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.KEYBOARD_ARROW_DOWN,
-                            icon_size=14,
-                            tooltip='下へ',
-                            disabled=index == len(todo_items) - 1,
-                            on_click=lambda _e, idx=index: move_todo_down(idx),
-                            style=ft.ButtonStyle(padding=2),
-                        ),
-                    ],
-                    spacing=4,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-                padding=ft.Padding.symmetric(horizontal=4, vertical=1),
-                border_radius=8,
-                bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else None,
+                            (
+                                todo_input
+                                if _is_editing_existing(index)
+                                else ft.Container(
+                                    content=ft.Text(
+                                        item.text,
+                                        size=12,
+                                        color=_C_INK if selected_todo_index[0] == index else _C_INK_SOFT,
+                                        font_family=_MONO,
+                                        text_align=ft.TextAlign.LEFT,
+                                        style=ft.TextStyle(
+                                            decoration=ft.TextDecoration.LINE_THROUGH if item.done else ft.TextDecoration.NONE,
+                                        ),
+                                    ),
+                                    on_click=lambda _e, idx=index: select_todo(idx),
+                                    expand=True,
+                                    alignment=ft.Alignment.CENTER_LEFT,
+                                    padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+                                    border_radius=6,
+                                    bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
+                                )
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.KEYBOARD_ARROW_UP,
+                                icon_size=14,
+                                tooltip='上へ',
+                                disabled=index == 0,
+                                on_click=lambda _e, idx=index: move_todo_up(idx),
+                                style=ft.ButtonStyle(padding=0),
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.KEYBOARD_ARROW_DOWN,
+                                icon_size=14,
+                                tooltip='下へ',
+                                disabled=index == len(todo_items) - 1,
+                                on_click=lambda _e, idx=index: move_todo_down(idx),
+                                style=ft.ButtonStyle(padding=0),
+                            ),
+                        ],
+                        spacing=2,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    padding=ft.Padding.symmetric(horizontal=2, vertical=0),
+                    border_radius=8,
+                    bgcolor=_C_BG_PANEL if _is_editing_existing(index) else None,
+                )
             )
-            for index, item in enumerate(todo_items)
-        ]
+
+        if len(todo_items) < 10:
+            controls.append(
+                ft.Container(
+                    content=(
+                        ft.Row(
+                            [
+                                ft.Container(width=22),
+                                todo_input,
+                            ],
+                            spacing=4,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        )
+                        if _is_editing_new()
+                        else ft.TextButton(
+                            content=ft.Text('＋ 新しいTodo', size=12, color=_C_INK_MUTE, font_family=_MONO),
+                            on_click=lambda _e: start_new_todo(),
+                            style=ft.ButtonStyle(
+                                padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+                                alignment=ft.Alignment.CENTER_LEFT,
+                            ),
+                        )
+                    ),
+                    padding=ft.Padding.symmetric(horizontal=2, vertical=0),
+                    border_radius=8,
+                    alignment=ft.Alignment.CENTER_LEFT,
+                    bgcolor=_C_BG_PANEL if _is_editing_new() else None,
+                )
+            )
+
+        todo_list_column.controls = controls
 
     def commit_todo() -> None:
         text = todo_input.value.strip()
@@ -587,9 +662,6 @@ def _build_gui(page: Any) -> _GuiView:
         if selected_todo_index[0] is not None and selected_todo_index[0] < len(todo_items):
             todo_items[selected_todo_index[0]].text = text
         else:
-            if len(todo_items) >= 10:
-                _show_snack('Todo は最大10件までです')
-                return
             todo_items.append(_TodoItem(text=text))
         _persist_todos()
         _clear_todo_selection()
@@ -701,7 +773,6 @@ def _build_gui(page: Any) -> _GuiView:
     pomodoro_start_button.on_click = lambda _e: start_pomodoro()
     pomodoro_pause_button.on_click = lambda _e: toggle_pomodoro_pause()
     pomodoro_skip_button.on_click = lambda _e: skip_pomodoro()
-    todo_add_button.on_click = lambda _e: commit_todo()
     todo_input.on_submit = lambda _e: commit_todo()
     _refresh_pomodoro_ui()
     _render_todos()
@@ -855,18 +926,10 @@ def _build_gui(page: Any) -> _GuiView:
     todo_card = ft.Container(
         content=ft.Column(
             [
-                ft.Row(
-                    [
-                        todo_input,
-                        todo_add_button,
-                    ],
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
                 ft.Container(
                     content=todo_list_column,
-                    height=118,
-                    padding=ft.Padding.symmetric(horizontal=6, vertical=6),
+                    height=112,
+                    padding=ft.Padding.symmetric(horizontal=4, vertical=4),
                     bgcolor=_C_BG_WINDOW,
                     border_radius=8,
                     border=ft.Border.all(1, _C_LINE),
@@ -874,13 +937,13 @@ def _build_gui(page: Any) -> _GuiView:
             ],
             alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-            spacing=8,
+            spacing=0,
         ),
         bgcolor=_C_BG_PANEL,
         border_radius=10,
         border=ft.Border.all(1, _C_LINE),
         expand=True,
-        padding=ft.Padding.only(left=16, right=16, top=16, bottom=16),
+        padding=ft.Padding.only(left=12, right=12, top=12, bottom=12),
     )
 
     right_col = ft.Container(
@@ -993,9 +1056,9 @@ def _build_gui(page: Any) -> _GuiView:
         pomodoro_pause_button=pomodoro_pause_button,
         pomodoro_skip_button=pomodoro_skip_button,
         todo_input=todo_input,
-        todo_add_button=todo_add_button,
         todo_list_column=todo_list_column,
         select_todo=select_todo,
+        start_new_todo=start_new_todo,
         commit_todo=commit_todo,
         move_todo_up=move_todo_up,
         move_todo_down=move_todo_down,

@@ -242,7 +242,9 @@ def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.Mon
 
     view.select_todo(1)
     assert view.todo_input.value == '資料整理'
-    assert _button_label(view.todo_add_button) == '保存'
+    selected_row = cast(ft.Container, view.todo_list_column.controls[1])
+    selected_row_content = cast(ft.Row, selected_row.content)
+    assert selected_row_content.controls[1] is view.todo_input
 
     view.todo_input.value = '資料整理 更新'
     view.commit_todo()
@@ -281,6 +283,52 @@ def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.Mon
     ]
 
 
+def test_build_gui_starts_new_todo_inline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """新規 Todo は一覧末尾の行をその場編集して追加する。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+
+    add_row = cast(ft.Container, view.todo_list_column.controls[1])
+    add_button = cast(ft.TextButton, add_row.content)
+    assert isinstance(add_button.content, ft.Text)
+    assert add_button.content.value == '＋ 新しいTodo'
+
+    view.start_new_todo()
+    inline_add_row = cast(ft.Container, view.todo_list_column.controls[1])
+    inline_add_row_content = cast(ft.Row, inline_add_row.content)
+    assert inline_add_row_content.controls[1] is view.todo_input
+
+    view.todo_input.value = '資料整理'
+    view.commit_todo()
+
+    assert saved_todos[-1] == [
+        gui._TodoItem(text='牛乳を買う', done=False),
+        gui._TodoItem(text='資料整理', done=False),
+    ]
+
+
 def test_build_gui_limits_todos_to_ten_items(monkeypatch: pytest.MonkeyPatch) -> None:
     """Todo は 10 件を超えて追加しない。"""
     page = _FakePage()
@@ -307,8 +355,7 @@ def test_build_gui_limits_todos_to_ten_items(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     view = gui._build_gui(page)
-    view.todo_input.value = 'overflow'
-    view.commit_todo()
+    view.start_new_todo()
 
     assert len(view.todo_list_column.controls) == 10
     assert saved_todos == []
