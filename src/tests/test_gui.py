@@ -493,6 +493,45 @@ def test_build_gui_cancels_new_todo_edit_with_escape(monkeypatch: pytest.MonkeyP
     assert add_button.content.value == '＋ 新しいTodo'
 
 
+def test_build_gui_commits_selected_todo_with_enter_without_text_focus(monkeypatch: pytest.MonkeyPatch) -> None:
+    """行選択直後でも Enter で Todo 編集を確定して閉じる。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+    view.select_todo(0)
+
+    keyboard_handler = cast(Callable[[object], None], page.on_keyboard_event)
+    keyboard_handler(SimpleNamespace(key='Enter'))
+
+    assert saved_todos[-1] == [gui._TodoItem(text='牛乳を買う', done=False)]
+    row = cast(ft.Container, view.todo_list_column.controls[0])
+    row_content = cast(ft.Row, row.content)
+    text_container = cast(ft.Container, row_content.controls[1])
+    assert isinstance(text_container.content, ft.Text)
+    assert text_container.content.value == '牛乳を買う'
+
+
 def test_build_gui_starts_new_todo_inline_when_list_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """Todo が空でも新規入力をその場で開始できる。"""
     page = _FakePage()

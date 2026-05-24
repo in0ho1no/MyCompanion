@@ -697,6 +697,9 @@ def _build_gui(page: Any) -> _GuiView:
         if event.key == 'Escape':
             _cancel_todo_edit()
             return
+        if event.key == 'Enter':
+            commit_todo()
+            return
         if todo_input.value.strip():
             return
         if event.key not in {'Backspace', 'Delete'}:
