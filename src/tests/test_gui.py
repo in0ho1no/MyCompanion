@@ -228,6 +228,26 @@ def test_build_gui_restores_selected_character_and_image(monkeypatch: pytest.Mon
     assert saved_states[-1] == ('SEKAI', '02.png')
 
 
+def test_build_gui_sets_todo_hint_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Todo 入力欄のヒントに確定と削除操作を表示する。"""
+    page = _FakePage()
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_load_today_todos', lambda state_file=gui._STATE_FILE, today=None: [])
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+
+    view = gui._build_gui(page)
+
+    assert view.todo_input.hint_text == 'Enter で確定・Delete で削除'
+
+
 def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.MonkeyPatch) -> None:
     """Todo 選択編集、並び替え、チェック変更が保存される。"""
     page = _FakePage()

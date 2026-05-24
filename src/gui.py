@@ -450,7 +450,7 @@ def _build_gui(page: Any) -> _GuiView:
     pomodoro_pause_button = _make_button('一時停止', disabled=True)
     pomodoro_skip_button = _make_button('スキップ', disabled=True)
     todo_input = ft.TextField(
-        hint_text='Enter で確定',
+        hint_text='Enter で確定・Delete で削除',
         text_size=12,
         expand=True,
         border_color=_C_LINE_STRONG,
