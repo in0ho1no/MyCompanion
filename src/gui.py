@@ -535,22 +535,23 @@ def _build_gui(page: Any) -> _GuiView:
                             on_change=lambda e, idx=index: _toggle_todo(idx, bool(e.control.value)),
                             scale=0.85,
                         ),
-                        ft.TextButton(
+                        ft.Container(
                             content=ft.Text(
                                 item.text,
                                 size=12,
                                 color=_C_INK if selected_todo_index[0] == index else _C_INK_SOFT,
                                 font_family=_MONO,
+                                text_align=ft.TextAlign.LEFT,
+                                style=ft.TextStyle(
+                                    decoration=ft.TextDecoration.LINE_THROUGH if item.done else ft.TextDecoration.NONE,
+                                ),
                             ),
                             on_click=lambda _e, idx=index: select_todo(idx),
-                            style=ft.ButtonStyle(
-                                padding=ft.Padding.symmetric(horizontal=8, vertical=6),
-                                shape=ft.RoundedRectangleBorder(radius=6),
-                                bgcolor={
-                                    ft.ControlState.DEFAULT: _C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
-                                },
-                            ),
                             expand=True,
+                            alignment=ft.Alignment.CENTER_LEFT,
+                            padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+                            border_radius=6,
+                            bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
                         ),
                         ft.IconButton(
                             icon=ft.Icons.KEYBOARD_ARROW_UP,

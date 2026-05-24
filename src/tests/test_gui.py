@@ -234,9 +234,10 @@ def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.Mon
     first_row = cast(ft.Container, view.todo_list_column.controls[0])
     first_row_content = cast(ft.Row, first_row.content)
     first_checkbox = cast(ft.Checkbox, first_row_content.controls[0])
-    first_button = cast(ft.TextButton, first_row_content.controls[1])
-    assert isinstance(first_button.content, ft.Text)
-    assert first_button.content.value == '牛乳を買う'
+    first_text_container = cast(ft.Container, first_row_content.controls[1])
+    assert isinstance(first_text_container.content, ft.Text)
+    assert first_text_container.content.value == '牛乳を買う'
+    assert first_text_container.alignment == ft.Alignment.CENTER_LEFT
     assert first_checkbox.value is False
 
     view.select_todo(1)
@@ -265,6 +266,13 @@ def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.Mon
     assert second_checkbox.on_change is not None
     toggle_handler = cast(Callable[[object], None], second_checkbox.on_change)
     toggle_handler(SimpleNamespace(control=second_checkbox))
+
+    updated_second_row = cast(ft.Container, view.todo_list_column.controls[1])
+    updated_second_row_content = cast(ft.Row, updated_second_row.content)
+    updated_second_text_container = cast(ft.Container, updated_second_row_content.controls[1])
+    assert isinstance(updated_second_text_container.content, ft.Text)
+    assert updated_second_text_container.content.style is not None
+    assert updated_second_text_container.content.style.decoration == ft.TextDecoration.LINE_THROUGH
 
     assert saved_todos[-1] == [
         gui._TodoItem(text='資料整理 更新', done=False),
