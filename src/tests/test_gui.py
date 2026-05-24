@@ -29,6 +29,7 @@ class _FakePage:
     title: str = ''
     bgcolor: str | None = None
     padding: int | None = None
+    on_keyboard_event: Callable[[object], None] | None = None
     window: SimpleNamespace = field(
         default_factory=lambda: SimpleNamespace(
             always_on_top=False,
@@ -105,6 +106,35 @@ def test_load_today_todos_carries_items_over_to_next_day(tmp_path: Path) -> None
     )
 
     assert gui._load_today_todos(state_file, today='2026-05-24') == [gui._TodoItem(text='散歩', done=False)]
+
+
+def test_normalize_todos_filters_invalid_entries_and_limits_to_ten() -> None:
+    """Todo 復元時は不正項目を除外し、10 件までに制限する。"""
+    raw: list[object] = [
+        {'text': '  散歩  ', 'done': False},
+        {'text': '', 'done': True},
+        {'text': '   ', 'done': False},
+        {'text': '読書', 'done': True},
+        {'text': 123, 'done': False},
+        'invalid',
+    ] + [{'text': f'Task {index}', 'done': index % 2 == 0} for index in range(12)]
+
+    todos = gui._normalize_todos(raw)
+
+    assert len(todos) == 10
+    assert todos[0] == gui._TodoItem(text='散歩', done=False)
+    assert todos[1] == gui._TodoItem(text='読書', done=True)
+    assert todos[-1] == gui._TodoItem(text='Task 7', done=False)
+
+
+def test_save_today_todos_truncates_to_ten_items(tmp_path: Path) -> None:
+    """Todo 保存時も 10 件までに切り詰める。"""
+    state_file = tmp_path / 'state.json'
+    todos = [gui._TodoItem(text=f'Task {index}', done=index % 2 == 0) for index in range(12)]
+
+    gui._save_today_todos(todos, state_file, today='2026-05-24')
+
+    assert gui._load_today_todos(state_file, today='2026-05-24') == todos[:10]
 
 
 def test_save_ui_state_preserves_today_todos(tmp_path: Path) -> None:
@@ -281,6 +311,143 @@ def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.Mon
         gui._TodoItem(text='牛乳を買う', done=True),
         gui._TodoItem(text='散歩', done=False),
     ]
+
+
+def test_build_gui_reorder_keeps_selected_editor_when_target_row_moves(monkeypatch: pytest.MonkeyPatch) -> None:
+    """選択中の行へ他項目が移動してきても編集対象を保つ。"""
+    page = _FakePage()
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [
+            gui._TodoItem(text='牛乳を買う'),
+            gui._TodoItem(text='資料整理'),
+            gui._TodoItem(text='散歩'),
+        ],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(gui, '_save_today_todos', lambda todos, state_file=gui._STATE_FILE, today=None: None)
+
+    view = gui._build_gui(page)
+    view.select_todo(1)
+    view.move_todo_up(2)
+
+    moved_row = cast(ft.Container, view.todo_list_column.controls[2])
+    moved_row_content = cast(ft.Row, moved_row.content)
+    assert moved_row_content.controls[1] is view.todo_input
+    assert view.todo_input.value == '資料整理'
+
+
+def test_build_gui_keyboard_event_ignores_non_delete_when_todo_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空欄編集中でも Delete 系以外のキーでは Todo を消さない。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+    view.select_todo(0)
+    view.todo_input.value = ''
+
+    keyboard_handler = cast(Callable[[object], None], page.on_keyboard_event)
+    keyboard_handler(SimpleNamespace(key='A'))
+
+    assert saved_todos == []
+    selected_row = cast(ft.Container, view.todo_list_column.controls[0])
+    selected_row_content = cast(ft.Row, selected_row.content)
+    assert selected_row_content.controls[1] is view.todo_input
+
+
+def test_build_gui_keyboard_event_ignores_delete_when_input_not_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Delete 系のキーでも入力中に文字があれば Todo を消さない。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+    view.select_todo(0)
+    view.todo_input.value = '編集中'
+
+    keyboard_handler = cast(Callable[[object], None], page.on_keyboard_event)
+    keyboard_handler(SimpleNamespace(key='Delete'))
+
+    assert saved_todos == []
+    assert view.todo_input.value == '編集中'
+
+
+def test_build_gui_starts_new_todo_inline_when_list_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Todo が空でも新規入力をその場で開始できる。"""
+    page = _FakePage()
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_load_today_todos', lambda state_file=gui._STATE_FILE, today=None: [])
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+
+    view = gui._build_gui(page)
+
+    add_row = cast(ft.Container, view.todo_list_column.controls[0])
+    add_button = cast(ft.TextButton, add_row.content)
+    assert isinstance(add_button.content, ft.Text)
+    assert add_button.content.value == '＋ 新しいTodo'
+
+    view.start_new_todo()
+
+    inline_add_row = cast(ft.Container, view.todo_list_column.controls[0])
+    inline_add_row_content = cast(ft.Row, inline_add_row.content)
+    assert inline_add_row_content.controls[1] is view.todo_input
 
 
 def test_build_gui_starts_new_todo_inline(monkeypatch: pytest.MonkeyPatch) -> None:
