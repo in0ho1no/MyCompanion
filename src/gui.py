@@ -18,6 +18,7 @@ from media import (
     _get_clicked_files_for_character,
     _get_pomodoro_files_for_character,
     _get_time_signal_files,
+    _get_todo_files_for_character,
     _list_character_images,
     _list_characters,
     _play_wav,
@@ -450,7 +451,7 @@ def _build_gui(page: Any) -> _GuiView:
     pomodoro_pause_button = _make_button('一時停止', disabled=True)
     pomodoro_skip_button = _make_button('スキップ', disabled=True)
     todo_input = ft.TextField(
-        hint_text='Enter で確定',
+        hint_text='Enter で確定・Delete で削除',
         text_size=12,
         expand=True,
         border_color=_C_LINE_STRONG,
@@ -491,6 +492,16 @@ def _build_gui(page: Any) -> _GuiView:
         selected_todo_index[0] = index
         todo_input.value = todo_items[index].text
 
+    def _cancel_todo_edit() -> None:
+        selected_index = selected_todo_index[0]
+        if selected_index is None:
+            return
+        if selected_index < len(todo_items):
+            todo_input.value = todo_items[selected_index].text
+        _clear_todo_selection()
+        _render_todos()
+        page.update()
+
     def start_new_todo() -> None:
         if len(todo_items) >= 10:
             _show_snack('Todo は最大10件までです')
@@ -503,9 +514,12 @@ def _build_gui(page: Any) -> _GuiView:
     def _toggle_todo(index: int, value: bool) -> None:
         if index >= len(todo_items):
             return
+        was_done = todo_items[index].done
         todo_items[index].done = value
         _persist_todos()
         _render_todos()
+        if not was_done and value:
+            _play_todo_voice('todo_done')
         page.update()
 
     def _move_todo(index: int, offset: int) -> None:
@@ -672,17 +686,27 @@ def _build_gui(page: Any) -> _GuiView:
         text = todo_input.value.strip()
         if not text:
             return
-        if selected_todo_index[0] is not None and selected_todo_index[0] < len(todo_items):
-            todo_items[selected_todo_index[0]].text = text
+        selected_index = selected_todo_index[0]
+        should_play_add_voice = selected_index is None or selected_index >= len(todo_items)
+        if selected_index is not None and selected_index < len(todo_items):
+            todo_items[selected_index].text = text
         else:
             todo_items.append(_TodoItem(text=text))
         _persist_todos()
         _clear_todo_selection()
         _render_todos()
+        if should_play_add_voice:
+            _play_todo_voice('todo_add')
         page.update()
 
     def on_page_keyboard_event(event: ft.KeyboardEvent) -> None:
         if selected_todo_index[0] is None:
+            return
+        if event.key == 'Escape':
+            _cancel_todo_edit()
+            return
+        if event.key == 'Enter':
+            commit_todo()
             return
         if todo_input.value.strip():
             return
@@ -705,6 +729,13 @@ def _build_gui(page: Any) -> _GuiView:
         if current_character is None:
             return
         files = _get_pomodoro_files_for_character(current_character, name)
+        if files:
+            _play_wav(random.choice(files))
+
+    def _play_todo_voice(name: str) -> None:
+        if current_character is None:
+            return
+        files = _get_todo_files_for_character(current_character, name)
         if files:
             _play_wav(random.choice(files))
 
