@@ -631,7 +631,7 @@ def _build_gui(page: Any) -> _GuiView:
                         spacing=1,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=ft.Padding.only(left=1, right=8, top=0, bottom=0),
+                    padding=ft.Padding.only(left=1, right=12, top=0, bottom=0),
                     border_radius=8,
                     bgcolor=_C_BG_PANEL if _is_editing_existing(index) else None,
                 )
@@ -659,7 +659,7 @@ def _build_gui(page: Any) -> _GuiView:
                             ),
                         )
                     ),
-                    padding=ft.Padding.only(left=1, right=8, top=0, bottom=0),
+                    padding=ft.Padding.only(left=1, right=12, top=0, bottom=0),
                     border_radius=8,
                     alignment=ft.Alignment.CENTER_LEFT,
                     bgcolor=_C_BG_PANEL if _is_editing_new() else None,
@@ -958,7 +958,7 @@ def _build_gui(page: Any) -> _GuiView:
                 ft.Container(
                     content=todo_list_column,
                     height=120,
-                    padding=ft.Padding.only(left=3, right=10, top=2, bottom=2),
+                    padding=ft.Padding.only(left=3, right=14, top=2, bottom=2),
                     bgcolor=_C_BG_WINDOW,
                     border_radius=8,
                     border=ft.Border.all(1, _C_LINE),
