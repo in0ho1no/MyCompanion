@@ -15,10 +15,12 @@ from pathlib import Path
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'check_sound_duplicate'))
-import check_duplicate as dup_checker
-
 _SRC_ROOT = Path(__file__).parent.parent.parent
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from tools.check_sound_duplicate import check_duplicate as dup_checker  # noqa: E402
+
 _RESOURCE_VOICE_DIR = _SRC_ROOT / 'resource' / 'voice'
 _MANIFEST_PATH = _RESOURCE_VOICE_DIR / 'voice_manifest.json'
 _INPUT_YAML_PATH = Path(__file__).parent / 'input_voices.yaml'
@@ -54,7 +56,25 @@ def _load_manifest() -> list[dict[str, object]]:
     if not _MANIFEST_PATH.exists():
         return []
     with open(_MANIFEST_PATH, encoding='utf-8') as f:
-        return json.load(f)  # type: ignore[no-any-return]
+        loaded = json.load(f)
+
+    if not isinstance(loaded, list):
+        raise ValueError('voice_manifest.json は配列である必要があります。')
+
+    manifest: list[dict[str, object]] = []
+    for item in loaded:
+        if not isinstance(item, dict):
+            raise ValueError('voice_manifest.json の各要素はオブジェクトである必要があります。')
+
+        record: dict[str, object] = {}
+        for key, value in item.items():
+            if not isinstance(key, str):
+                raise ValueError('voice_manifest.json のキーは文字列である必要があります。')
+            record[key] = value
+
+        manifest.append(record)
+
+    return manifest
 
 
 def _save_manifest(manifest: list[dict[str, object]]) -> None:

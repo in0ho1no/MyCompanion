@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import gen_voice
 import pytest
 import yaml
+
+from tools.generate_voice import gen_voice
 
 
 class _FixedNow:

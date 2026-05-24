@@ -5,7 +5,7 @@ from __future__ import annotations
 import wave
 from pathlib import Path
 
-import check_duplicate
+from tools.check_sound_duplicate import check_duplicate
 
 
 def _write_wav(path: Path, frames: bytes) -> None:
