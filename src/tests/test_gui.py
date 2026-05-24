@@ -96,6 +96,38 @@ def test_load_ui_state_supports_legacy_character_only_format(tmp_path: Path) -> 
     }
 
 
+def test_load_today_todos_returns_empty_for_different_day(tmp_path: Path) -> None:
+    """保存日が違う Todo は当日一覧へ出さない。"""
+    state_file = tmp_path / 'state.json'
+    state_file.write_text(
+        '{"todo_date": "2026-05-23", "todos": [{"text": "散歩", "done": false}]}',
+        encoding='utf-8',
+    )
+
+    assert gui._load_today_todos(state_file, today='2026-05-24') == []
+
+
+def test_save_ui_state_preserves_today_todos(tmp_path: Path) -> None:
+    """キャラクター保存時に Todo 状態を消さない。"""
+    state_file = tmp_path / 'state.json'
+
+    gui._save_today_todos(
+        [gui._TodoItem(text='散歩'), gui._TodoItem(text='読書', done=True)],
+        state_file,
+        today='2026-05-24',
+    )
+    gui._save_ui_state('SEKAI', '02.png', state_file)
+
+    assert gui._load_ui_state(state_file) == {
+        'selected_character': 'SEKAI',
+        'selected_image': '02.png',
+    }
+    assert gui._load_today_todos(state_file, today='2026-05-24') == [
+        gui._TodoItem(text='散歩', done=False),
+        gui._TodoItem(text='読書', done=True),
+    ]
+
+
 def test_resolve_initial_character_prefers_previous_selection() -> None:
     """前回選択が存在すればそのまま復元する。"""
     selected, message = gui._resolve_initial_character(['COKO', 'SEKAI'], 'SEKAI')
@@ -164,6 +196,59 @@ def test_build_gui_restores_selected_character_and_image(monkeypatch: pytest.Mon
     assert isinstance(view.char_image_area.content, ft.Image)
     assert view.char_image_area.content.src == 'SEKAI\\02.png'
     assert saved_states[-1] == ('SEKAI', '02.png')
+
+
+def test_build_gui_adds_and_checks_today_todos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Todo 追加とチェック変更が当日状態へ保存される。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_load_today_todos', lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')])
+    monkeypatch.setattr(gui, '_today_key', lambda now=None: '2026-05-24')
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+
+    assert view.todo_list_column.controls
+    first_checkbox = cast(ft.Checkbox, view.todo_list_column.controls[0])
+    assert first_checkbox.label == '牛乳を買う'
+    assert first_checkbox.value is False
+
+    view.todo_input.value = '資料整理'
+    assert view.todo_add_button.on_click is not None
+    add_handler = cast(Callable[[object], None], view.todo_add_button.on_click)
+    add_handler(SimpleNamespace(control=view.todo_add_button))
+
+    assert len(view.todo_list_column.controls) == 2
+    added_checkbox = cast(ft.Checkbox, view.todo_list_column.controls[1])
+    assert added_checkbox.label == '資料整理'
+    assert saved_todos[-1] == [
+        gui._TodoItem(text='牛乳を買う', done=False),
+        gui._TodoItem(text='資料整理', done=False),
+    ]
+
+    added_checkbox.value = True
+    assert added_checkbox.on_change is not None
+    toggle_handler = cast(Callable[[object], None], added_checkbox.on_change)
+    toggle_handler(SimpleNamespace(control=added_checkbox))
+
+    assert saved_todos[-1] == [
+        gui._TodoItem(text='牛乳を買う', done=False),
+        gui._TodoItem(text='資料整理', done=True),
+    ]
 
 
 def test_character_menu_click_updates_image_and_persists_state(monkeypatch: pytest.MonkeyPatch) -> None:
