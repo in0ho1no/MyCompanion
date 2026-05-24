@@ -96,15 +96,15 @@ def test_load_ui_state_supports_legacy_character_only_format(tmp_path: Path) -> 
     }
 
 
-def test_load_today_todos_returns_empty_for_different_day(tmp_path: Path) -> None:
-    """保存日が違う Todo は当日一覧へ出さない。"""
+def test_load_today_todos_carries_items_over_to_next_day(tmp_path: Path) -> None:
+    """保存日が違っても Todo は翌日へ持ち越す。"""
     state_file = tmp_path / 'state.json'
     state_file.write_text(
         '{"todo_date": "2026-05-23", "todos": [{"text": "散歩", "done": false}]}',
         encoding='utf-8',
     )
 
-    assert gui._load_today_todos(state_file, today='2026-05-24') == []
+    assert gui._load_today_todos(state_file, today='2026-05-24') == [gui._TodoItem(text='散歩', done=False)]
 
 
 def test_save_ui_state_preserves_today_todos(tmp_path: Path) -> None:
@@ -198,8 +198,8 @@ def test_build_gui_restores_selected_character_and_image(monkeypatch: pytest.Mon
     assert saved_states[-1] == ('SEKAI', '02.png')
 
 
-def test_build_gui_adds_and_checks_today_todos(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Todo 追加とチェック変更が当日状態へ保存される。"""
+def test_build_gui_edits_reorders_and_checks_today_todos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Todo 選択編集、並び替え、チェック変更が保存される。"""
     page = _FakePage()
     saved_todos: list[list[gui._TodoItem]] = []
 
@@ -209,7 +209,15 @@ def test_build_gui_adds_and_checks_today_todos(monkeypatch: pytest.MonkeyPatch) 
         '_load_ui_state',
         lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
     )
-    monkeypatch.setattr(gui, '_load_today_todos', lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')])
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [
+            gui._TodoItem(text='牛乳を買う'),
+            gui._TodoItem(text='資料整理'),
+            gui._TodoItem(text='散歩'),
+        ],
+    )
     monkeypatch.setattr(gui, '_today_key', lambda now=None: '2026-05-24')
     monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
     monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
@@ -223,32 +231,83 @@ def test_build_gui_adds_and_checks_today_todos(monkeypatch: pytest.MonkeyPatch) 
     view = gui._build_gui(page)
 
     assert view.todo_list_column.controls
-    first_checkbox = cast(ft.Checkbox, view.todo_list_column.controls[0])
-    assert first_checkbox.label == '牛乳を買う'
+    first_row = cast(ft.Container, view.todo_list_column.controls[0])
+    first_row_content = cast(ft.Row, first_row.content)
+    first_checkbox = cast(ft.Checkbox, first_row_content.controls[0])
+    first_button = cast(ft.TextButton, first_row_content.controls[1])
+    assert isinstance(first_button.content, ft.Text)
+    assert first_button.content.value == '牛乳を買う'
     assert first_checkbox.value is False
 
-    view.todo_input.value = '資料整理'
-    assert view.todo_add_button.on_click is not None
-    add_handler = cast(Callable[[object], None], view.todo_add_button.on_click)
-    add_handler(SimpleNamespace(control=view.todo_add_button))
+    view.select_todo(1)
+    assert view.todo_input.value == '資料整理'
+    assert _button_label(view.todo_add_button) == '保存'
 
-    assert len(view.todo_list_column.controls) == 2
-    added_checkbox = cast(ft.Checkbox, view.todo_list_column.controls[1])
-    assert added_checkbox.label == '資料整理'
+    view.todo_input.value = '資料整理 更新'
+    view.commit_todo()
     assert saved_todos[-1] == [
         gui._TodoItem(text='牛乳を買う', done=False),
-        gui._TodoItem(text='資料整理', done=False),
+        gui._TodoItem(text='資料整理 更新', done=False),
+        gui._TodoItem(text='散歩', done=False),
     ]
 
-    added_checkbox.value = True
-    assert added_checkbox.on_change is not None
-    toggle_handler = cast(Callable[[object], None], added_checkbox.on_change)
-    toggle_handler(SimpleNamespace(control=added_checkbox))
+    view.move_todo_down(0)
+    assert saved_todos[-1] == [
+        gui._TodoItem(text='資料整理 更新', done=False),
+        gui._TodoItem(text='牛乳を買う', done=False),
+        gui._TodoItem(text='散歩', done=False),
+    ]
+
+    second_row = cast(ft.Container, view.todo_list_column.controls[1])
+    second_row_content = cast(ft.Row, second_row.content)
+    second_checkbox = cast(ft.Checkbox, second_row_content.controls[0])
+    second_checkbox.value = True
+    assert second_checkbox.on_change is not None
+    toggle_handler = cast(Callable[[object], None], second_checkbox.on_change)
+    toggle_handler(SimpleNamespace(control=second_checkbox))
 
     assert saved_todos[-1] == [
-        gui._TodoItem(text='牛乳を買う', done=False),
-        gui._TodoItem(text='資料整理', done=True),
+        gui._TodoItem(text='資料整理 更新', done=False),
+        gui._TodoItem(text='牛乳を買う', done=True),
+        gui._TodoItem(text='散歩', done=False),
     ]
+
+
+def test_build_gui_limits_todos_to_ten_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Todo は 10 件を超えて追加しない。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text=f'Task {index}') for index in range(10)],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+    view.todo_input.value = 'overflow'
+    view.commit_todo()
+
+    assert len(view.todo_list_column.controls) == 10
+    assert saved_todos == []
+    assert len(page.overlay) == 1
+    snack = cast(ft.SnackBar, page.overlay[0])
+    assert isinstance(snack.content, ft.Text)
+    assert snack.content.value == 'Todo は最大10件までです'
 
 
 def test_character_menu_click_updates_image_and_persists_state(monkeypatch: pytest.MonkeyPatch) -> None:
