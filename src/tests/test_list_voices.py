@@ -6,8 +6,9 @@ import argparse
 import subprocess
 from pathlib import Path
 
-import list_voices
 import pytest
+
+from tools.list_voices import list_voices
 
 
 def test_load_voicepeak_path_reads_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -61,6 +61,7 @@
 			"uv run mypy": true,
 			"uv run pytest": true,
 			"uv run python src/main.py": true,
+			"uv run pyright":true,
 		},
 	}
 }
