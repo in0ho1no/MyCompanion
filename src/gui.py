@@ -549,7 +549,7 @@ def _build_gui(page: Any) -> _GuiView:
                                 ft.Container(width=22),
                                 todo_input,
                             ],
-                            spacing=2,
+                            spacing=1,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         padding=ft.Padding.symmetric(horizontal=2, vertical=0),
@@ -583,7 +583,7 @@ def _build_gui(page: Any) -> _GuiView:
                                 value=item.done,
                                 active_color=_C_ACCENT,
                                 on_change=lambda e, idx=index: _toggle_todo(idx, bool(e.control.value)),
-                                scale=0.72,
+                                scale=0.68,
                             ),
                             (
                                 todo_input
@@ -602,25 +602,29 @@ def _build_gui(page: Any) -> _GuiView:
                                     on_click=lambda _e, idx=index: select_todo(idx),
                                     expand=True,
                                     alignment=ft.Alignment.CENTER_LEFT,
-                                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                                    padding=ft.Padding.symmetric(horizontal=4, vertical=2),
                                     border_radius=6,
                                     bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
                                 )
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.KEYBOARD_ARROW_UP,
-                                icon_size=12,
+                                icon_size=10,
                                 tooltip='上へ',
                                 disabled=index == 0,
                                 on_click=lambda _e, idx=index: move_todo_up(idx),
+                                width=18,
+                                height=18,
                                 style=ft.ButtonStyle(padding=0),
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.KEYBOARD_ARROW_DOWN,
-                                icon_size=12,
+                                icon_size=10,
                                 tooltip='下へ',
                                 disabled=index == len(todo_items) - 1,
                                 on_click=lambda _e, idx=index: move_todo_down(idx),
+                                width=18,
+                                height=18,
                                 style=ft.ButtonStyle(padding=0),
                             ),
                         ],
@@ -642,7 +646,7 @@ def _build_gui(page: Any) -> _GuiView:
                                 ft.Container(width=22),
                                 todo_input,
                             ],
-                            spacing=2,
+                            spacing=1,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         )
                         if _is_editing_new()
@@ -950,9 +954,10 @@ def _build_gui(page: Any) -> _GuiView:
     todo_card = ft.Container(
         content=ft.Column(
             [
+                _make_panel_badge('Todo'),
                 ft.Container(
                     content=todo_list_column,
-                    height=130,
+                    height=120,
                     padding=ft.Padding.symmetric(horizontal=3, vertical=2),
                     bgcolor=_C_BG_WINDOW,
                     border_radius=8,
@@ -961,7 +966,7 @@ def _build_gui(page: Any) -> _GuiView:
             ],
             alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-            spacing=0,
+            spacing=8,
         ),
         bgcolor=_C_BG_PANEL,
         border_radius=10,
