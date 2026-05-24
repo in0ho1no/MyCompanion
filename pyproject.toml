@@ -109,7 +109,27 @@ exclude = [
 ]
 
 [tool.pyright]
-extraPaths = ["src/tools/check_sound_duplicate"]
+# 型チェックの対象ディレクトリ
+include = ["src"]
+# 既存の除外ルールと同期
+exclude = [
+    **/__pycache__,
+    "**/.git",
+    "**/.mypy_cache",
+    "**/.ruff_cache",
+    "**/.venv",
+    "**/venv",
+    "**/__pypackages__",
+    "**/_build",
+    "**/build",
+    "**/dist",
+    "**/node_modules",
+    "docs/source/conf.py",
+]
+pythonVersion = "3.12"
+pythonPlatform = "All"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
