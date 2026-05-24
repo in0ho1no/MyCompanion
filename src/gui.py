@@ -491,6 +491,16 @@ def _build_gui(page: Any) -> _GuiView:
         selected_todo_index[0] = index
         todo_input.value = todo_items[index].text
 
+    def _cancel_todo_edit() -> None:
+        selected_index = selected_todo_index[0]
+        if selected_index is None:
+            return
+        if selected_index < len(todo_items):
+            todo_input.value = todo_items[selected_index].text
+        _clear_todo_selection()
+        _render_todos()
+        page.update()
+
     def start_new_todo() -> None:
         if len(todo_items) >= 10:
             _show_snack('Todo は最大10件までです')
@@ -683,6 +693,9 @@ def _build_gui(page: Any) -> _GuiView:
 
     def on_page_keyboard_event(event: ft.KeyboardEvent) -> None:
         if selected_todo_index[0] is None:
+            return
+        if event.key == 'Escape':
+            _cancel_todo_edit()
             return
         if todo_input.value.strip():
             return
