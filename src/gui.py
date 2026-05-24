@@ -459,7 +459,7 @@ def _build_gui(page: Any) -> _GuiView:
         content_padding=ft.Padding.symmetric(horizontal=8, vertical=6),
         dense=True,
     )
-    todo_list_column = ft.Column(spacing=1, scroll=ft.ScrollMode.AUTO)
+    todo_list_column = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO)
     selected_todo_index: list[int | None] = [None]
 
     def _show_snack(msg: str) -> None:
@@ -564,7 +564,7 @@ def _build_gui(page: Any) -> _GuiView:
                             content=ft.Text('＋ 新しいTodo', size=12, color=_C_INK_MUTE, font_family=_MONO),
                             on_click=lambda _e: start_new_todo(),
                             style=ft.ButtonStyle(
-                                padding=ft.Padding.symmetric(horizontal=6, vertical=4),
+                                padding=ft.Padding.symmetric(horizontal=6, vertical=0),
                                 alignment=ft.Alignment.CENTER_LEFT,
                             ),
                         ),
@@ -602,7 +602,7 @@ def _build_gui(page: Any) -> _GuiView:
                                     on_click=lambda _e, idx=index: select_todo(idx),
                                     expand=True,
                                     alignment=ft.Alignment.CENTER_LEFT,
-                                    padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                                    padding=ft.Padding.symmetric(horizontal=4, vertical=1),
                                     border_radius=6,
                                     bgcolor=_C_BG_PANEL if selected_todo_index[0] == index else _C_BG_WINDOW,
                                 )
@@ -631,7 +631,7 @@ def _build_gui(page: Any) -> _GuiView:
                         spacing=1,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=ft.Padding.symmetric(horizontal=1, vertical=0),
+                    padding=ft.Padding.only(left=1, right=8, top=0, bottom=0),
                     border_radius=8,
                     bgcolor=_C_BG_PANEL if _is_editing_existing(index) else None,
                 )
@@ -654,12 +654,12 @@ def _build_gui(page: Any) -> _GuiView:
                             content=ft.Text('＋ 新しいTodo', size=12, color=_C_INK_MUTE, font_family=_MONO),
                             on_click=lambda _e: start_new_todo(),
                             style=ft.ButtonStyle(
-                                padding=ft.Padding.symmetric(horizontal=6, vertical=4),
+                                padding=ft.Padding.symmetric(horizontal=6, vertical=2),
                                 alignment=ft.Alignment.CENTER_LEFT,
                             ),
                         )
                     ),
-                    padding=ft.Padding.symmetric(horizontal=1, vertical=0),
+                    padding=ft.Padding.only(left=1, right=8, top=0, bottom=0),
                     border_radius=8,
                     alignment=ft.Alignment.CENTER_LEFT,
                     bgcolor=_C_BG_PANEL if _is_editing_new() else None,
@@ -958,7 +958,7 @@ def _build_gui(page: Any) -> _GuiView:
                 ft.Container(
                     content=todo_list_column,
                     height=120,
-                    padding=ft.Padding.symmetric(horizontal=3, vertical=2),
+                    padding=ft.Padding.only(left=3, right=10, top=2, bottom=2),
                     bgcolor=_C_BG_WINDOW,
                     border_radius=8,
                     border=ft.Border.all(1, _C_LINE),
