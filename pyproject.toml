@@ -113,7 +113,8 @@ exclude = [
 include = ["src"]
 # 既存の除外ルールと同期
 exclude = [
-    **/__pycache__,
+    "**/.*",
+    "**/__pycache__",
     "**/.git",
     "**/.mypy_cache",
     "**/.ruff_cache",
@@ -130,6 +131,10 @@ pythonVersion = "3.12"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
 reportMissingTypeStubs = false
+reportUnnecessaryTypeIgnoreComment = true
+reportUnnecessaryIsInstance = true
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
