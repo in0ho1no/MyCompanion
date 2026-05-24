@@ -329,6 +329,83 @@ def test_build_gui_starts_new_todo_inline(monkeypatch: pytest.MonkeyPatch) -> No
     ]
 
 
+def test_build_gui_deletes_empty_selected_todo_with_backspace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空欄の編集中 Todo は Backspace/Delete で削除する。"""
+    page = _FakePage()
+    saved_todos: list[list[gui._TodoItem]] = []
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [
+            gui._TodoItem(text='牛乳を買う'),
+            gui._TodoItem(text='資料整理'),
+        ],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(
+        gui,
+        '_save_today_todos',
+        lambda todos, state_file=gui._STATE_FILE, today=None: saved_todos.append([gui._TodoItem(text=item.text, done=item.done) for item in todos]),
+    )
+
+    view = gui._build_gui(page)
+    view.select_todo(0)
+    view.todo_input.value = ''
+
+    assert hasattr(page, 'on_keyboard_event')
+    keyboard_handler = cast(Callable[[object], None], page.on_keyboard_event)
+    keyboard_handler(SimpleNamespace(key='Backspace'))
+
+    assert saved_todos[-1] == [gui._TodoItem(text='資料整理', done=False)]
+    remaining_row = cast(ft.Container, view.todo_list_column.controls[0])
+    remaining_row_content = cast(ft.Row, remaining_row.content)
+    remaining_text_container = cast(ft.Container, remaining_row_content.controls[1])
+    assert isinstance(remaining_text_container.content, ft.Text)
+    assert remaining_text_container.content.value == '資料整理'
+
+
+def test_build_gui_cancels_empty_new_todo_with_delete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空欄の新規 Todo 行は Delete でキャンセルする。"""
+    page = _FakePage()
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(
+        gui,
+        '_load_today_todos',
+        lambda state_file=gui._STATE_FILE, today=None: [gui._TodoItem(text='牛乳を買う')],
+    )
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+
+    view = gui._build_gui(page)
+    view.start_new_todo()
+    view.todo_input.value = ''
+
+    assert hasattr(page, 'on_keyboard_event')
+    keyboard_handler = cast(Callable[[object], None], page.on_keyboard_event)
+    keyboard_handler(SimpleNamespace(key='Delete'))
+
+    add_row = cast(ft.Container, view.todo_list_column.controls[1])
+    add_button = cast(ft.TextButton, add_row.content)
+    assert isinstance(add_button.content, ft.Text)
+    assert add_button.content.value == '＋ 新しいTodo'
+
+
 def test_build_gui_limits_todos_to_ten_items(monkeypatch: pytest.MonkeyPatch) -> None:
     """Todo は 10 件を超えて追加しない。"""
     page = _FakePage()

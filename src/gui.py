@@ -470,6 +470,15 @@ def _build_gui(page: Any) -> _GuiView:
     def _persist_todos() -> None:
         _save_today_todos(todo_items)
 
+    def _delete_todo(index: int) -> None:
+        if not (0 <= index < len(todo_items)):
+            return
+        todo_items.pop(index)
+        _persist_todos()
+        _clear_todo_selection()
+        _render_todos()
+        page.update()
+
     def _clear_todo_selection(clear_input: bool = True) -> None:
         selected_todo_index[0] = None
         if clear_input:
@@ -668,6 +677,20 @@ def _build_gui(page: Any) -> _GuiView:
         _render_todos()
         page.update()
 
+    def on_page_keyboard_event(event: ft.KeyboardEvent) -> None:
+        if selected_todo_index[0] is None:
+            return
+        if todo_input.value.strip():
+            return
+        if event.key not in {'Backspace', 'Delete'}:
+            return
+        if selected_todo_index[0] < len(todo_items):
+            _delete_todo(selected_todo_index[0])
+            return
+        _clear_todo_selection()
+        _render_todos()
+        page.update()
+
     def _is_pomodoro_active() -> bool:
         return pomodoro_phase[0] in {'focus', 'break'}
 
@@ -774,6 +797,7 @@ def _build_gui(page: Any) -> _GuiView:
     pomodoro_pause_button.on_click = lambda _e: toggle_pomodoro_pause()
     pomodoro_skip_button.on_click = lambda _e: skip_pomodoro()
     todo_input.on_submit = lambda _e: commit_todo()
+    page.on_keyboard_event = on_page_keyboard_event
     _refresh_pomodoro_ui()
     _render_todos()
 
@@ -928,7 +952,7 @@ def _build_gui(page: Any) -> _GuiView:
             [
                 ft.Container(
                     content=todo_list_column,
-                    height=124,
+                    height=130,
                     padding=ft.Padding.symmetric(horizontal=3, vertical=2),
                     bgcolor=_C_BG_WINDOW,
                     border_radius=8,
