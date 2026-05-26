@@ -1,7 +1,10 @@
 """gui モジュールのテスト。"""
 
+import asyncio
+import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -474,6 +477,7 @@ def test_build_gui_cancels_existing_todo_edit_with_escape(monkeypatch: pytest.Mo
     keyboard_handler(SimpleNamespace(key='Escape'))
 
     assert saved_todos == []
+    assert view.todo_input.value == '牛乳を買う'
     row = cast(ft.Container, view.todo_list_column.controls[0])
     row_content = cast(ft.Row, row.content)
     text_container = cast(ft.Container, row_content.controls[1])
@@ -1016,3 +1020,63 @@ def test_build_gui_checking_todo_plays_done_voice_only_when_marking_complete(mon
     checkbox.value = False
     toggle_handler(SimpleNamespace(control=checkbox))
     assert played_paths == ['COKO\\todo_done_001.wav']
+
+
+def test_build_gui_clears_time_signal_playback_when_date_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """日付が変わると time signal の再生済み記録をリセットする。"""
+    page = _FakePage()
+    played_paths: list[str] = []
+    sleep_calls = 0
+
+    class _SequenceDateTime:
+        def __init__(self, values: list[datetime]) -> None:
+            self._values = values
+            self._index = 0
+
+        def now(self, tz: object = None) -> datetime:
+            value = self._values[self._index] if self._index < len(self._values) else self._values[-1]
+            self._index += 1
+            return value
+
+    monkeypatch.setattr(gui, '_list_characters', lambda: ['COKO'])
+    monkeypatch.setattr(
+        gui,
+        '_load_ui_state',
+        lambda state_file=gui._STATE_FILE: {'selected_character': 'COKO', 'selected_image': None},
+    )
+    monkeypatch.setattr(gui, '_load_today_todos', lambda state_file=gui._STATE_FILE, today=None: [])
+    monkeypatch.setattr(gui, '_character_dir_exists', lambda character: True)
+    monkeypatch.setattr(gui, '_list_character_images', lambda character: [Path('COKO/01.png')])
+    monkeypatch.setattr(gui, '_save_ui_state', lambda character, image_name, state_file=gui._STATE_FILE: None)
+    monkeypatch.setattr(gui, '_get_time_signal_files', lambda hhmm: [Path(f'time_signal/{hhmm}.wav')])
+    monkeypatch.setattr(gui, '_play_wav', lambda path: played_paths.append(str(path)))
+    monkeypatch.setattr(
+        gui,
+        'datetime',
+        _SequenceDateTime(
+            [
+                datetime(2026, 5, 24, 7, 0, tzinfo=gui._TZ_TOKYO),
+                datetime(2026, 5, 24, 7, 0, tzinfo=gui._TZ_TOKYO),
+                datetime(2026, 5, 25, 7, 0, tzinfo=gui._TZ_TOKYO),
+            ]
+        ),
+    )
+
+    async def fake_sleep(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls == 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(gui.asyncio, 'sleep', fake_sleep)
+
+    view = gui._build_gui(page)
+
+    async def run_clock_loop() -> None:
+        with contextlib.suppress(asyncio.CancelledError):
+            await view.clock_loop()
+
+    asyncio.run(run_clock_loop())
+
+    expected_path = str(Path('time_signal/0700.wav'))
+    assert played_paths == [expected_path, expected_path]
