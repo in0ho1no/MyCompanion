@@ -34,11 +34,23 @@ def _display_output_path(output_path: Path) -> str:
 
 
 def _load_config(voicepeak_path_arg: str | None, narrator_arg: str | None) -> tuple[str, str | None]:
+    voicepeak_path = voicepeak_path_arg or ''
+    narrator = narrator_arg
+    if not _CONFIG_PATH.exists():
+        return voicepeak_path, narrator
+
     with open(_CONFIG_PATH, 'rb') as f:
         config = tomllib.load(f)
-    section = config['generate_voice']
-    voicepeak_path: str = voicepeak_path_arg or section['voicepeak_path']
-    narrator = narrator_arg or section.get('narrator')
+    section = config.get('generate_voice')
+    if isinstance(section, dict):
+        config_voicepeak = section.get('voicepeak_path')
+        if not voicepeak_path and isinstance(config_voicepeak, str) and config_voicepeak:
+            voicepeak_path = config_voicepeak
+
+        config_narrator = section.get('narrator')
+        if narrator is None and isinstance(config_narrator, str) and config_narrator:
+            narrator = config_narrator
+
     return voicepeak_path, narrator
 
 
@@ -167,6 +179,14 @@ def _get_output_dir(category: str, narrator: str, dir_cache: dict[str, Path]) ->
     return output_dir
 
 
+def _has_non_empty_str(entry: Mapping[str, object], key: str) -> bool:
+    try:
+        _get_required_str(entry, key)
+    except ValueError:
+        return False
+    return True
+
+
 def _validate_named_entries(entries_obj: object, label: str, voice_narrator: str | None) -> bool:
     if not isinstance(entries_obj, list):
         print(f'エラー: {label} は配列である必要があります。')
@@ -179,8 +199,14 @@ def _validate_named_entries(entries_obj: object, label: str, voice_narrator: str
         if 'name' not in entry:
             print(f'エラー: {label}エントリに "name" キーがありません: {entry}')
             return False
+        if not _has_non_empty_str(entry, 'name'):
+            print(f'エラー: {label}エントリの "name" は空でない文字列である必要があります: {entry}')
+            return False
         if 'text' not in entry:
             print(f'エラー: {label}エントリに "text" キーがありません: {entry}')
+            return False
+        if not _has_non_empty_str(entry, 'text'):
+            print(f'エラー: {label}エントリの "text" は空でない文字列である必要があります: {entry}')
             return False
         if _resolve_narrator(entry, voice_narrator) is None:
             print(f'エラー: {label}エントリに narrator がありません: {entry}')
@@ -258,6 +284,9 @@ def _validate_input(input_data: Mapping[str, object], default_narrator: str | No
             if 'hhmm' not in entry:
                 print(f'エラー: time_signalエントリに "hhmm" キーがありません: {entry}')
                 return False
+            if not _has_non_empty_str(entry, 'hhmm'):
+                print(f'エラー: time_signalエントリの "hhmm" は空でない文字列である必要があります: {entry}')
+                return False
 
             texts = entry.get('texts')
             if not isinstance(texts, list):
@@ -270,6 +299,9 @@ def _validate_input(input_data: Mapping[str, object], default_narrator: str | No
                     return False
                 if 'text' not in text_entry:
                     print(f'エラー: time_signal の text エントリに "text" キーがありません: {text_entry}')
+                    return False
+                if not _has_non_empty_str(text_entry, 'text'):
+                    print(f'エラー: time_signal の text エントリの "text" は空でない文字列である必要があります: {text_entry}')
                     return False
                 if _resolve_narrator(text_entry, voice_narrator) is None:
                     print(f'エラー: time_signal の text エントリに narrator がありません: {text_entry}')
@@ -294,6 +326,9 @@ def main() -> None:
     args = parser.parse_args()
 
     voicepeak, default_narrator = _load_config(args.voicepeak_path, args.narrator)
+    if not voicepeak:
+        print('エラー: voicepeak_path が指定されていません。config.toml か --voicepeak-path を指定してください。')
+        sys.exit(1)
     default_emotions: str | None = args.emotions or None
 
     try:

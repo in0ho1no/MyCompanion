@@ -433,6 +433,7 @@ def _build_gui(page: Any) -> _GuiView:
     _save_ui_state(current_character, selected_image_name[0])
 
     played_hhmm: set[str] = set()
+    last_played_day = _today_key()
     pomodoro_phase: list[str] = ['idle']
     pomodoro_set: list[int] = [0]
     pomodoro_remaining: list[int] = [pomodoro_config.focus_seconds]
@@ -498,7 +499,7 @@ def _build_gui(page: Any) -> _GuiView:
             return
         if selected_index < len(todo_items):
             todo_input.value = todo_items[selected_index].text
-        _clear_todo_selection()
+        _clear_todo_selection(clear_input=False)
         _render_todos()
         page.update()
 
@@ -1082,8 +1083,13 @@ def _build_gui(page: Any) -> _GuiView:
     )
 
     async def clock_loop() -> None:
+        nonlocal last_played_day
         while True:
             now = datetime.now(_TZ_TOKYO)
+            today_key = _today_key(now)
+            if today_key != last_played_day:
+                played_hhmm.clear()
+                last_played_day = today_key
             hhmm_str = now.strftime('%H%M')
             hhmm_text.value = now.strftime('%H:%M')
             ss_text.value = f':{now.strftime("%S")}'

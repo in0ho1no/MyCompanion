@@ -53,6 +53,16 @@ def test_load_config_allows_missing_narrator(tmp_path: Path, monkeypatch: pytest
     assert narrator is None
 
 
+def test_load_config_uses_cli_arguments_when_config_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """config.toml がなくても CLI 引数をそのまま使う。"""
+    monkeypatch.setattr(gen_voice, '_CONFIG_PATH', tmp_path / 'missing.toml')
+
+    voicepeak_path, narrator = gen_voice._load_config('from-arg.exe', 'Arg Narrator')
+
+    assert voicepeak_path == 'from-arg.exe'
+    assert narrator == 'Arg Narrator'
+
+
 def test_load_input_data_reads_yaml_mapping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """入力 YAML をそのまま辞書として読み込む。"""
     input_path = tmp_path / 'input_voices.yaml'
@@ -141,6 +151,37 @@ def test_validate_input_rejects_pomodoro_entry_without_name(capsys: pytest.Captu
     captured = capsys.readouterr()
     assert is_valid is False
     assert 'pomodoroエントリに "name" キーがありません' in captured.out
+
+
+@pytest.mark.parametrize(
+    ('category', 'entry', 'expected_message'),
+    [
+        ('clicked', {'name': '', 'text': 'hello'}, 'clickedエントリの "name" は空でない文字列である必要があります'),
+        ('clicked', {'name': 42, 'text': 'hello'}, 'clickedエントリの "name" は空でない文字列である必要があります'),
+        (
+            'pomodoro',
+            {'name': 'pomodoro_focus_start', 'text': ''},
+            'pomodoroエントリの "text" は空でない文字列である必要があります',
+        ),
+        (
+            'pomodoro',
+            {'name': 'pomodoro_focus_start', 'text': 42},
+            'pomodoroエントリの "text" は空でない文字列である必要があります',
+        ),
+    ],
+)
+def test_validate_input_rejects_invalid_named_entry_values(
+    capsys: pytest.CaptureFixture[str],
+    category: str,
+    entry: dict[str, object],
+    expected_message: str,
+) -> None:
+    """Name / text の値が不正なら検証で止める。"""
+    is_valid = gen_voice._validate_input({'voices': [{'narrator': 'Narrator', category: [entry]}]}, None)
+
+    captured = capsys.readouterr()
+    assert is_valid is False
+    assert expected_message in captured.out
 
 
 def test_validate_input_accepts_valid_entries() -> None:
